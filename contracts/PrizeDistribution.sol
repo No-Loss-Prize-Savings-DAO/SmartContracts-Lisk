@@ -30,7 +30,7 @@ contract PrizeDistribution is VRFConsumerBaseV2, ConfirmedOwner {
     uint256 lastRequestTime;
 
     bytes32 keyHash =
-        0x474e34a077df58807dbe9c96d3c009b23b3c6d0cce433e59bbf5b34f823bc56c;
+    0x474e34a077df58807dbe9c96d3c009b23b3c6d0cce433e59bbf5b34f823bc56c;
 
     uint32 callbackGasLimit = 300000;
 
@@ -58,7 +58,7 @@ contract PrizeDistribution is VRFConsumerBaseV2, ConfirmedOwner {
         address _savingsContractAddress,
         address _daoGovernanceAddress
     ) VRFConsumerBaseV2(0x8103B0A8A00be2DDC778e6e7eaa21791Cd364625)
-        ConfirmedOwner(msg.sender) {
+    ConfirmedOwner(msg.sender) {
         COORDINATOR = VRFCoordinatorV2Interface(
             0x8103B0A8A00be2DDC778e6e7eaa21791Cd364625
         );
@@ -68,9 +68,9 @@ contract PrizeDistribution is VRFConsumerBaseV2, ConfirmedOwner {
     }
 
     function requestRandomWords()
-        public
-        onlyOwner
-        returns (uint256 requestId)
+    public
+    onlyOwner
+    returns (uint256 requestId)
     {
         // Will revert if subscription is not set and funded.
         requestId = COORDINATOR.requestRandomWords(
@@ -101,7 +101,7 @@ contract PrizeDistribution is VRFConsumerBaseV2, ConfirmedOwner {
         require(s_requests[_requestId].exists, "request not found");
         s_requests[_requestId].fulfilled = true;
         for (uint256 i = 0; i < _randomWords.length; i++) {
-        // Generate a random number between 1 and 3
+            // Generate a random number between 1 and 3
             _randomWords[i] = _randomWords[i] % 10;
         }
         s_requests[_requestId].randomWords = _randomWords;
