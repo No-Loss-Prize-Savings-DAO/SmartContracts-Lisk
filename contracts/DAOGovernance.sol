@@ -10,18 +10,22 @@ contract DAOGovernance is Ownable {
         string description;
         uint256 totalVotes;
         uint256 requiredVotes;
+        uint256 endTime;
         bool active;
         mapping(address => bool) voted;
     }
 
-    address[] public daoAddresses;
-    // address public savingsContractAddress;
-    ISavingsContract public savingsContract;
+    address[] daoAddresses;
+    ISavingsContract savingsContract;
+    address public regulatoryCompliance;
     mapping(uint256 => Proposal) public proposals;
     uint256 public proposalCount;
     uint256 public totalMembers;
     uint256 public totalVotingPower;
     address public acceptedDAO;
+
+    uint256 public constant MIN_VOTING_DURATION = 1 days;
+    uint256 public constant MAX_VOTING_DURATION = 7 days;
 
     event ProposalCreated(uint256 proposalId, string description);
     event Voted(uint256 proposalId, address voter, uint256 votes);
@@ -29,21 +33,31 @@ contract DAOGovernance is Ownable {
     event MemberAdded(address member);
     event MemberRemoved(address member);
 
+    modifier onlyActiveProposal(uint256 proposalId) {
+        require(proposals[proposalId].active, "Proposal is not active");
+        _;
+    }
+
     constructor(address _savingsContractAddress) Ownable(msg.sender) {
-        // savingsContractAddress = _savingsContractAddress;
         savingsContract = ISavingsContract(_savingsContractAddress);
     }
 
-    function proposeMembership(address user) external onlyOwner {
-        createProposal(user, "New DAO Membership Proposal");
+    function bindAddress(address _regulatoryCompliance) external onlyOwner {
+        regulatoryCompliance = _regulatoryCompliance;
     }
 
-    function proposeActivity(string memory description) external {
+    function proposeMembership(address user) external {
+        require(msg.sender == regulatoryCompliance, "Only regulatoryCompliance contract can call this function");
+        createProposal(user, "New DAO Membership Proposal", (block.timestamp + MAX_VOTING_DURATION));
+    }
+
+    function proposeActivity(string memory description, uint256 duration) external {
         require(savingsContract.isDAO(msg.sender), "Only DAO members can propose activity.");
-        createProposal(msg.sender, description);
+        require(duration >= MIN_VOTING_DURATION && duration <= MAX_VOTING_DURATION, "Invalid voting duration");
+        createProposal(msg.sender, description, (block.timestamp + duration));
     }
 
-    function createProposal(address proposer, string memory description) private {
+    function createProposal(address proposer, string memory description, uint256 endTime) private {
         uint256 proposalId = ++proposalCount;
         // Initialize the proposal in storage
         Proposal storage proposal = proposals[proposalId];
@@ -52,17 +66,18 @@ contract DAOGovernance is Ownable {
         proposal.description = description;
         proposal.totalVotes = 0;
         proposal.requiredVotes = totalVotingPower * 2 / 3;
+        proposal.endTime = endTime;
         proposal.active = true;
         emit ProposalCreated(proposalId, description);
     }
 
-    function voteOnProposal(uint256 proposalId, bool support) external {
+    function voteOnProposal(uint256 proposalId, bool support) external onlyActiveProposal(proposalId) {
         require(savingsContract.isDAO(msg.sender), "Only DAO members can vote");
         Proposal storage proposal = proposals[proposalId];
         require(!proposal.voted[msg.sender], "Already voted");
-        require(proposal.active, "Proposal is not active");
+        require(block.timestamp < proposal.endTime, "Voting period has ended");
 
-        uint256 voterBalance = savingsContract.getBalance(msg.sender);
+        (uint256 voterBalance, ) = savingsContract.getUserBalance(msg.sender);
         uint256 votes = voterBalance / 3000;
 
         if (support && votes > 0) {
@@ -122,7 +137,7 @@ contract DAOGovernance is Ownable {
         address[] memory members = savingsContract.fetchAddressesBySlots();
         for (uint256 i = 0; i < members.length; i++) {
             address member = members[i];
-            uint256 balance = savingsContract.getBalance(member);
+            (uint256 balance, ) = savingsContract.getUserBalance(member);
             uint256 votingPower = balance / 3000;
             newTotalVotingPower += votingPower;
         }

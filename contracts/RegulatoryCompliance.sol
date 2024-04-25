@@ -7,7 +7,7 @@ import "./interfaces/IComplianceDatabase.sol";
 
 contract RegulatoryCompliance is Ownable {
     IDAOGovernance public daoGovernance;
-    address public daoGovernanceAddress;
+    address public savingsContractAddress;
     IComplianceDatabase public complianceDatabase;
     mapping(address => bool) public agreementStatus;
 
@@ -18,13 +18,13 @@ contract RegulatoryCompliance is Ownable {
     }
 
     // Function to add the DAO Governance address
-    function addDAOGovernanceAddress(address _daoGovernanceAddress) external onlyOwner {
+    function bindAddresses(address _daoGovernanceAddress, address _savingsContractAddress) external onlyOwner {
         daoGovernance = IDAOGovernance(_daoGovernanceAddress);
+        savingsContractAddress = _savingsContractAddress;
     }
 
-    function sendAgreements(string calldata key) external onlyOwner {
-        // Assume some mechanism exists to send agreements to the user
-        // Once the user accepts, initiate DAO proposal
+    function sendAgreements(string calldata key) external {
+        require(msg.sender == savingsContractAddress, "Only savings contract can call this function");
         complianceDatabase.getDAORegulation(key);
         emit AgreementSent(msg.sender, key);
     }
