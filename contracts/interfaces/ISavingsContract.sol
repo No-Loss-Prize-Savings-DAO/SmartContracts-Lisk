@@ -6,19 +6,21 @@ interface ISavingsContract {
 
     function withdraw(uint256 amount) external;
 
+    function withdrawContractToken(uint256 amount) external;
+
     function forfeitDAO(uint256 tokenId) external;
 
     function acceptIntoDAO(address user) external;
 
     function fetchAddressesBySlots() external view returns (address[] memory sortedAddresses);
 
-    function isDAO(address user) external view returns (bool);
-
-    function getBalance(address user) external view returns (uint256);
+    function getTotalSlots() external view returns (uint256);
 
     function transferFund(address to, uint256 amount) external;
 
-    function getTotalSlots() external view returns (uint256);
+    function isDAO(address user) external view returns (bool);
 
-    function withdrawToken(uint256 amount) external;
+    function getUserBalance(address user) external view returns (uint256 stableCoinBalance, uint256 contractTokenBalance);
+
+    function getContractBalance() external view returns (uint256 stableCoinBalance, uint256 contractTokenBalance);
 }

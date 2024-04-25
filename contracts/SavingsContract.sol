@@ -12,67 +12,116 @@ import "./interfaces/IDAOGovernance.sol";
 contract SavingsContract is Ownable {
     using SafeERC20 for IERC20;
 
+    // Tokens
+    IERC20 public stableCoin;
     IERC20 public contractToken;
+
+    // Contracts
     IRegulatoryCompliance public regulatoryCompliance;
     INFTContract public nftContract;
     address public daoGovernanceAddress;
 
+    // User-related mappings and arrays
     address[] public userAddresses;
     mapping(address => User) public users;
     mapping(address => bool) private addressExists;
-    uint256 contractBalance;
+
+    // Contract balance
+    uint256 public totalStableCoinBalance;
+    uint256 public totalContractTokenBalance;
 
     struct User {
+        uint256 stableCoinBalance;
+        uint256 contractTokenBalance;
         uint256 slots;
         bool isDAO;
-        uint256 balance;
+        uint256 lockExpiry;
     }
 
-    constructor(address _contractTokenAddress, address _regulatoryComplianceAddress, address _nftContractAddress) Ownable(msg.sender) {
+    // Events
+    event StableCoinDeposited(address indexed user, uint256 amount);
+    event ContractTokenDeposited(address indexed user, uint256 amount);
+    event StableCoinWithdrawn(address indexed user, uint256 amount);
+    event ContractTokenWithdrawn(address indexed user, uint256 amount);
+    event ActivityTracker(address indexed user, uint256 amount);
+
+    constructor(
+        address _stableCoinAddress,
+        address _contractTokenAddress,
+        address _regulatoryComplianceAddress,
+        address _nftContractAddress
+    ) Ownable(msg.sender) {
+        stableCoin = IERC20(_stableCoinAddress);
         contractToken = IERC20(_contractTokenAddress);
         regulatoryCompliance = IRegulatoryCompliance(_regulatoryComplianceAddress);
         nftContract = INFTContract(_nftContractAddress);
     }
 
-    // Function to add the DAO Governance address
     function addDAOGovernanceAddress(address _daoGovernanceAddress) external onlyOwner {
         daoGovernanceAddress = _daoGovernanceAddress;
     }
 
-    function deposit(uint256 amount) public {
-        contractToken.safeTransferFrom(msg.sender, address(this), amount);
-        if (users[msg.sender].balance == 0 && !addressExists[msg.sender]) {
-            userAddresses.push(msg.sender);
-            addressExists[msg.sender] = true;
-        }
-        users[msg.sender].balance += amount;
-        contractBalance += amount;
-        users[msg.sender].slots = users[msg.sender].balance / 100;
-
-        if (!users[msg.sender].isDAO && users[msg.sender].balance >= 3000) {
-            regulatoryCompliance.sendAgreements("New DAO");
-        }
+    function deposit(uint256 amount) external {
+        stableCoin.safeTransferFrom(msg.sender, address(this), amount);
+        _depositStableCoin(msg.sender, amount);
     }
 
-    function withdraw(uint256 amount) public {
-        require(users[msg.sender].balance >= amount, "Insufficient balance");
-        require(!users[msg.sender].isDAO || (users[msg.sender].isDAO && users[msg.sender].balance - amount >= 3000),
-            "DAO members must maintain at least 3000 tokens");
+    function withdraw(uint256 amount) external {
+        require(users[msg.sender].stableCoinBalance >= amount, "Insufficient stable coin balance");
+        require(!users[msg.sender].isDAO || (users[msg.sender].isDAO && users[msg.sender].stableCoinBalance - amount >= 3000), 
+            "DAO members must forfeit DAO membership to withdraw funds");
+            
+        users[msg.sender].stableCoinBalance -= amount;
+        totalStableCoinBalance -= amount;
+        stableCoin.safeTransfer(msg.sender, amount);
 
-        users[msg.sender].balance -= amount;
-        contractBalance -= amount;
-        // TO-DO remove user from array of userAddresses once balance goes below 100 token
-        users[msg.sender].slots = users[msg.sender].balance / 100;
+        // Remove user from array if stable coin balance is 0
+        if (users[msg.sender].stableCoinBalance == 0) {
+            _removeUser(msg.sender);
+        }
+
+        emit StableCoinWithdrawn(msg.sender, amount);
+    }
+
+    function withdrawContractToken(uint256 amount) external {
+        require(users[msg.sender].contractTokenBalance >= amount, "Insufficient contract token balance");
+        users[msg.sender].contractTokenBalance -= amount;
+        totalContractTokenBalance -= amount;
         contractToken.safeTransfer(msg.sender, amount);
+        emit ContractTokenWithdrawn(msg.sender, amount);
+    }
 
-        // Update address existence status if the balance becomes zero
-        if (users[msg.sender].balance == 0) {
-            addressExists[msg.sender] = false;
+    function _depositStableCoin(address user, uint256 amount) private {
+        if (users[user].stableCoinBalance == 0 && !addressExists[user]) {
+            userAddresses.push(user);
+            addressExists[user] = true;
+        }
+        users[user].stableCoinBalance += amount;
+        totalStableCoinBalance += amount;
+        users[user].slots = users[user].stableCoinBalance / 100;
+
+        if (!users[user].isDAO && users[user].stableCoinBalance >= 3000) {
+            regulatoryCompliance.sendAgreements("New DAO");
+            users[user].lockExpiry = block.timestamp + (1 * 365 days);
+        }
+        emit StableCoinDeposited(user, amount);
+    }
+
+    function _removeUser(address user) private {
+        addressExists[user] = false;
+        for (uint256 i = 0; i < userAddresses.length; i++) {
+            if (userAddresses[i] == user) {
+                userAddresses[i] = userAddresses[userAddresses.length - 1];
+                userAddresses.pop();
+                break;
+            }
         }
     }
 
-    function forfeitDAO(uint256 tokenId) public {
+    function forfeitDAO(uint256 tokenId) external {
         require(users[msg.sender].isDAO, "Not a DAO member");
+        require(block.timestamp >= users[msg.sender].lockExpiry, "DAO lock period has not expired");
+
         nftContract.burn(tokenId);
         users[msg.sender].isDAO = false;
     }
@@ -83,7 +132,7 @@ contract SavingsContract is Ownable {
         nftContract.mint(user);
     }
 
-    function fetchAddressesBySlots() public view returns (address[] memory sortedAddresses) {
+    function fetchAddressesBySlots() external view returns (address[] memory sortedAddresses) {
         uint256 totalSlots = getTotalSlots();
 
         sortedAddresses = new address[](totalSlots);
@@ -104,7 +153,6 @@ contract SavingsContract is Ownable {
         for (uint256 i = 0; i < userAddresses.length; i++) {
             totalSlots += users[userAddresses[i]].slots;
         }
-
         return totalSlots;
     }
 
@@ -116,16 +164,27 @@ contract SavingsContract is Ownable {
         return users[user].isDAO;
     }
 
-    function getBalance(address user) external view returns (uint256) {
-        return users[user].balance;
+    function getUserBalance(address user) external view returns (uint256 stableCoinBalance, uint256 contractTokenBalance) {
+        return (users[user].stableCoinBalance, users[user].contractTokenBalance);
     }
 
-    function withdrawToken(uint256 amount) external onlyOwner() {
-        require(contractBalance >= amount, "Insufficient balance in contract");
-        contractBalance -= amount;
-        contractToken.safeTransfer(msg.sender, amount);
+    function getContractBalance() external view returns (uint256 stableCoinBalance, uint256 contractTokenBalance) {
+        return (totalStableCoinBalance, totalContractTokenBalance);
     }
 
-    // TO-DO implement a returnToken function for owner to return the withdrawn amount back without incrementing owners' balance
-    // TO-DO implement a lock period between when the owner withdraws the token for a transaction and when it is returned.
+    function withdrawAmount(uint256 amount) external onlyOwner() {
+        uint256 maxWithdrawalAmount = (totalStableCoinBalance * 60) / 100;
+        require(amount <= maxWithdrawalAmount, "Withdrawal amount exceeds the maximum allowed");
+        require(totalStableCoinBalance >= amount, "Insufficient stableToken balance in contract");
+
+        totalStableCoinBalance -= amount;
+        stableCoin.safeTransfer(msg.sender, amount);
+        emit ActivityTracker(msg.sender, amount);
+    }
+
+    function refundWithdrawnAmount(uint256 amount) external onlyOwner() {
+        totalStableCoinBalance += amount;
+        stableCoin.safeTransferFrom(msg.sender, address(this), amount);
+        emit ActivityTracker(msg.sender, amount);
+    }
 }
