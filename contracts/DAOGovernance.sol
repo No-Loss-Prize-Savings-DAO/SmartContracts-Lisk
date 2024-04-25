@@ -15,7 +15,6 @@ contract DAOGovernance is Ownable {
     }
 
     address[] public daoAddresses;
-    // address public savingsContractAddress;
     ISavingsContract public savingsContract;
     mapping(uint256 => Proposal) public proposals;
     uint256 public proposalCount;
@@ -30,7 +29,6 @@ contract DAOGovernance is Ownable {
     event MemberRemoved(address member);
 
     constructor(address _savingsContractAddress) Ownable(msg.sender) {
-        // savingsContractAddress = _savingsContractAddress;
         savingsContract = ISavingsContract(_savingsContractAddress);
     }
 
@@ -62,7 +60,7 @@ contract DAOGovernance is Ownable {
         require(!proposal.voted[msg.sender], "Already voted");
         require(proposal.active, "Proposal is not active");
 
-        uint256 voterBalance = savingsContract.getBalance(msg.sender);
+        (uint256 voterBalance, ) = savingsContract.getUserBalance(msg.sender);
         uint256 votes = voterBalance / 3000;
 
         if (support && votes > 0) {
@@ -122,7 +120,7 @@ contract DAOGovernance is Ownable {
         address[] memory members = savingsContract.fetchAddressesBySlots();
         for (uint256 i = 0; i < members.length; i++) {
             address member = members[i];
-            uint256 balance = savingsContract.getBalance(member);
+            (uint256 balance, ) = savingsContract.getUserBalance(member);
             uint256 votingPower = balance / 3000;
             newTotalVotingPower += votingPower;
         }
