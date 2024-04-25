@@ -35,7 +35,7 @@ contract SavingsContract is Ownable {
         uint256 contractTokenBalance;
         uint256 slots;
         bool isDAO;
-        uint256 lockExpiry;
+        uint256 daoLockExpiry;
     }
 
     // Events
@@ -102,7 +102,7 @@ contract SavingsContract is Ownable {
 
         if (!users[user].isDAO && users[user].stableCoinBalance >= 3000) {
             regulatoryCompliance.sendAgreements("New DAO");
-            users[user].lockExpiry = block.timestamp + (1 * 365 days);
+            users[user].daoLockExpiry = block.timestamp + (1 * 365 days);
         }
         emit StableCoinDeposited(user, amount);
     }
@@ -120,7 +120,7 @@ contract SavingsContract is Ownable {
 
     function forfeitDAO(uint256 tokenId) external {
         require(users[msg.sender].isDAO, "Not a DAO member");
-        require(block.timestamp >= users[msg.sender].lockExpiry, "DAO lock period has not expired");
+        require(block.timestamp >= users[msg.sender].daoLockExpiry, "DAO lock period has not expired");
 
         nftContract.burn(tokenId);
         users[msg.sender].isDAO = false;
