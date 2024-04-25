@@ -14,10 +14,7 @@ contract ComplianceDatabase is Ownable {
         userRegulations["Tax"] = "Tax regulations govern the taxation of cryptocurrency transactions, including buying, selling, and trading digital assets. Understanding your tax obligations is important to ensure compliance with the law.";
 
         // Initialize DAO regulations
-        daoRegulations["AML/KYC"] = "As part of our commitment to integrity and risk management, all prospective DAO members should understand the implications of AML/KYC regulations on their participation.";
-        daoRegulations["Securities"] = "DAO members should understand the potential legal and financial implications of participating in DAO activities, including compliance with securities regulations.";
-        daoRegulations["Tax"] = "DAO members should be aware of their tax obligations related to cryptocurrency investments and activities within the DAO.";
-        daoRegulations["New DAO"] = "All DAOs getto share 30% of the total complete on each prize distribution. A DAO can earn more when his proposal is accepted. Before proposing a business idea within the DAO, members should conduct thorough due diligence to assess potential risks and ensure the viability of the proposal. DAO funds are at risk, and improper proposals may lead to losses for the community. Members found to have knowingly proposed fraudulent or risky ventures may face penalties, including loss of tokens or expulsion from the DAO.";
+        daoRegulations["New DAO"] = "A lock period will be initiated for an amount of $3000 for one year. All DAOs gets to share 30% of the total complete on each prize distribution. A DAO can earn more when his proposal is accepted. Before proposing a business idea within the DAO, members should conduct thorough due diligence to assess potential risks and ensure the viability of the proposal. DAO funds are at risk, and improper proposals may lead to losses for the community. Members found to have knowingly proposed fraudulent or risky ventures may face penalties, including loss of tokens or expulsion from the DAO.";
     }
 
     function addUserRegulation(string calldata key, string calldata regulation) external onlyOwner {

@@ -14,8 +14,9 @@ contract DAOGovernance is Ownable {
         mapping(address => bool) voted;
     }
 
-    address[] public daoAddresses;
-    ISavingsContract public savingsContract;
+    address[] daoAddresses;
+    ISavingsContract savingsContract;
+    address public regulatoryCompliance;
     mapping(uint256 => Proposal) public proposals;
     uint256 public proposalCount;
     uint256 public totalMembers;
@@ -32,7 +33,12 @@ contract DAOGovernance is Ownable {
         savingsContract = ISavingsContract(_savingsContractAddress);
     }
 
-    function proposeMembership(address user) external onlyOwner {
+    function bindAddress(address _regulatoryCompliance) external onlyOwner {
+        regulatoryCompliance = _regulatoryCompliance;
+    }
+
+    function proposeMembership(address user) external {
+        require(msg.sender == regulatoryCompliance, "Only regulatoryCompliance contract can call this function");
         createProposal(user, "New DAO Membership Proposal");
     }
 
