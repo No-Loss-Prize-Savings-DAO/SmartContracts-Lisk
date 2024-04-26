@@ -79,6 +79,7 @@ contract SavingsContract is Ownable {
 
         // Remove user from array if stable coin balance is 0
         if (users[msg.sender].stableCoinBalance == 0) {
+            users[msg.sender].slots = 0;
             _removeUser(msg.sender);
         }
 
