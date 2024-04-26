@@ -6,8 +6,8 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract FactoryERC20 is ERC20, Ownable {
 
-    constructor(string memory _name, string memory _symbol) ERC20(_name, _symbol) Ownable(msg.sender) {
-        _mint(msg.sender, 1000000 * 10 ** uint(decimals()));
+    constructor(string memory _name, string memory _symbol, uint _decimals) ERC20(_name, _symbol) Ownable(msg.sender) {
+        _mint(msg.sender, 1000000 * 10 ** _decimals);
     }
 
     function mint(address to, uint256 amount) public onlyOwner {

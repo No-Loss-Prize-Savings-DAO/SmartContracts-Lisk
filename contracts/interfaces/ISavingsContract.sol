@@ -14,6 +14,8 @@ interface ISavingsContract {
 
     function fetchAddressesBySlots() external view returns (address[] memory sortedAddresses);
 
+    function fetchUserAddresses() external view returns (address[] memory sortedAddresses);
+
     function getTotalSlots() external view returns (uint256);
 
     function transferFund(address to, uint256 amount) external;

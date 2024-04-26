@@ -84,9 +84,15 @@ describe("ComplianceDatabase", function () {
     });
 
     it("Should return an empty string if a wrong key is passed", async function () {
-      const { complianceDatabase, randomKey, daoRegulations } = await loadFixture(deployComplianceDatabaseFixture);
+      const { complianceDatabase, randomKey } = await loadFixture(deployComplianceDatabaseFixture);
 
       expect(await complianceDatabase.getDAORegulation(randomKey)).to.equal("");
+    });
+
+    it("Should return an empty string if an empty key is passed", async function () {
+      const { complianceDatabase, randomKey } = await loadFixture(deployComplianceDatabaseFixture);
+
+      expect(await complianceDatabase.getDAORegulation("")).to.equal("");
     });
   });
 });
