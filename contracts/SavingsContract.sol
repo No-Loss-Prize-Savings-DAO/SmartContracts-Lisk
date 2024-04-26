@@ -57,7 +57,7 @@ contract SavingsContract is Ownable {
         nftContract = INFTContract(_nftContractAddress);
     }
 
-    function addDAOGovernanceAddress(address _daoGovernanceAddress) external onlyOwner {
+    function bindAddress(address _daoGovernanceAddress) external onlyOwner {
         daoGovernanceAddress = _daoGovernanceAddress;
     }
 
@@ -68,7 +68,7 @@ contract SavingsContract is Ownable {
 
     function withdraw(uint256 amount) external {
         require(users[msg.sender].stableCoinBalance >= amount, "Insufficient stable coin balance");
-        require(!users[msg.sender].isDAO || (users[msg.sender].isDAO && users[msg.sender].stableCoinBalance - amount >= 3000), 
+        require(!users[msg.sender].isDAO || (users[msg.sender].isDAO && users[msg.sender].stableCoinBalance - amount >= 3000e6), 
             "DAO members must forfeit DAO membership to withdraw funds");
             
         users[msg.sender].stableCoinBalance -= amount;
@@ -98,9 +98,9 @@ contract SavingsContract is Ownable {
         }
         users[user].stableCoinBalance += amount;
         totalStableCoinBalance += amount;
-        users[user].slots = users[user].stableCoinBalance / 100;
+        users[user].slots = users[user].stableCoinBalance / 100e6;
 
-        if (!users[user].isDAO && users[user].stableCoinBalance >= 3000) {
+        if (!users[user].isDAO && users[user].stableCoinBalance >= 3000e6) {
             regulatoryCompliance.sendAgreements("New DAO");
             users[user].daoLockExpiry = block.timestamp + (1 * 365 days);
         }
@@ -146,6 +146,19 @@ contract SavingsContract is Ownable {
         }
 
         return sortedAddresses;
+    }
+
+    function fetchUserAddresses() external view returns (address[] memory uniqueUserAddresses) {
+        uint256 totalAddresses = userAddresses.length;
+
+        uniqueUserAddresses = new address[](totalAddresses);
+        uint256 counter = 0;
+
+        for (uint256 i = 0; i < userAddresses.length; i++) {
+            uniqueUserAddresses[counter++] = userAddresses[i];
+        }
+
+        return uniqueUserAddresses;
     }
 
     function getTotalSlots() public view returns (uint256) {

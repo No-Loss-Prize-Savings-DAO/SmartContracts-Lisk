@@ -12,7 +12,7 @@ contract NFTContract is ERC721URIStorage, Ownable { // Inherit from ERC721URISto
 
     constructor() ERC721("DAO Membership NFT", "DAONFT") Ownable(msg.sender) {}
 
-    function addSavingsContractAddress(address _savingsContractAddress) external onlyOwner() {
+    function bindAddress(address _savingsContractAddress) external onlyOwner() {
         savingsContractAddress = _savingsContractAddress;
     }
 

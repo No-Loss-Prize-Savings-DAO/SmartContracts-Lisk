@@ -78,7 +78,7 @@ contract DAOGovernance is Ownable {
         require(block.timestamp < proposal.endTime, "Voting period has ended");
 
         (uint256 voterBalance, ) = savingsContract.getUserBalance(msg.sender);
-        uint256 votes = voterBalance / 3000;
+        uint256 votes = voterBalance / 3000e6;
 
         if (support && votes > 0) {
             proposal.totalVotes += votes;
@@ -134,11 +134,11 @@ contract DAOGovernance is Ownable {
 
     function updateTotalVotingPower() private {
         uint256 newTotalVotingPower = 0;
-        address[] memory members = savingsContract.fetchAddressesBySlots();
+        address[] memory members = savingsContract.fetchUserAddresses();
         for (uint256 i = 0; i < members.length; i++) {
             address member = members[i];
             (uint256 balance, ) = savingsContract.getUserBalance(member);
-            uint256 votingPower = balance / 3000;
+            uint256 votingPower = balance / 3000e6;
             newTotalVotingPower += votingPower;
         }
         totalVotingPower = newTotalVotingPower;
