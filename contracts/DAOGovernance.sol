@@ -87,7 +87,7 @@ contract DAOGovernance is Ownable {
             if (proposal.totalVotes >= proposal.requiredVotes) {
                 proposal.active = false;
                 if (keccak256(bytes(proposal.description)) == keccak256(bytes("New DAO Membership Proposal"))) {
-                    addMember(proposal.proposer);
+                    _addMember(proposal.proposer);
                 } else {
                     acceptedDAO = proposal.proposer;
                 }
@@ -102,7 +102,11 @@ contract DAOGovernance is Ownable {
         return (proposal.description, proposal.totalVotes, proposal.requiredVotes, proposal.active);
     }
 
-    function addMember(address member) public onlyOwner {
+    function addMember(address member) external onlyOwner {
+        _addMember(member);
+    }
+
+    function _addMember(address member) private {
         require(!savingsContract.isDAO(member), "Already a DAO member");
         savingsContract.acceptIntoDAO(member);
         daoAddresses.push(member);
