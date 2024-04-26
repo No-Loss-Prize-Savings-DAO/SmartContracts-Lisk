@@ -42,6 +42,7 @@ contract PrizeDistribution is VRFConsumerBaseV2, ConfirmedOwner {
     uint32 numWords = 5;
 
     address[] public winners;
+    address deployer;
     uint256 contractSharePercentage = 30;
     uint256 daoShare = 30;
     uint256 winnerSharePercentage = 30;
@@ -65,6 +66,12 @@ contract PrizeDistribution is VRFConsumerBaseV2, ConfirmedOwner {
         s_subscriptionId = subscriptionId;
         savingsContract = ISavingsContract(_savingsContractAddress);
         daoGovernance = IDAOGovernance(_daoGovernanceAddress);
+        deployer = msg.sender;
+    }
+
+    modifier onlyDeployer() {
+        require(msg.sender == deployer, "Only the deployer can call this function");
+        _;
     }
 
     function requestRandomWords()
@@ -114,7 +121,7 @@ contract PrizeDistribution is VRFConsumerBaseV2, ConfirmedOwner {
         return (request.fulfilled, request.randomWords[0], request.randomWords[1], request.randomWords[2], request.randomWords[3], request.randomWords[4]);
     }
 
-    function distributeProfit(uint256 amount) external {
+    function distributeProfit(uint256 amount) external onlyDeployer {
         require(amount > 0, "Invalid profit amount");
 
         address[] memory fetchedWinners = getWinners();

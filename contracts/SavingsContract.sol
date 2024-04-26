@@ -17,9 +17,10 @@ contract SavingsContract is Ownable {
     IERC20 public contractToken;
 
     // Contracts
-    IRegulatoryCompliance public regulatoryCompliance;
-    INFTContract public nftContract;
-    address public daoGovernanceAddress;
+    IRegulatoryCompliance regulatoryCompliance;
+    INFTContract nftContract;
+    address daoGovernanceAddress;
+    address prizeDistributionAddress;
 
     // User-related mappings and arrays
     address[] public userAddresses;
@@ -57,8 +58,9 @@ contract SavingsContract is Ownable {
         nftContract = INFTContract(_nftContractAddress);
     }
 
-    function bindAddress(address _daoGovernanceAddress) external onlyOwner {
+    function bindAddress(address _daoGovernanceAddress, address _prizeDistributionAddress) external onlyOwner {
         daoGovernanceAddress = _daoGovernanceAddress;
+        prizeDistributionAddress = _prizeDistributionAddress;
     }
 
     function deposit(uint256 amount) external {
@@ -170,6 +172,7 @@ contract SavingsContract is Ownable {
     }
 
     function transferFund(address to, uint256 amount) external {
+        require(msg.sender == prizeDistributionAddress, "Only prizeDistribution contract can call this function");
         contractToken.safeTransfer(to, amount);
     }
 

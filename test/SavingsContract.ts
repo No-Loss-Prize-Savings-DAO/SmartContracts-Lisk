@@ -17,6 +17,7 @@ describe("SavingsContract", function () {
     const contractTokenMintAmount = 1_000_000_000_000_000_000_000_000n;
     const contractTokenDecimals = 18;
     const deposit = 1_000_000_000;
+    const mockId = 12345;
 
     const STABLE_TOKEN_NAME = "USD Tether";
     const STABLE_TOKEN_SYMBOL = "USDT";
@@ -57,16 +58,19 @@ describe("SavingsContract", function () {
     const DAOGovernance = await hre.ethers.getContractFactory("DAOGovernance");
     const daoGovernance = await DAOGovernance.deploy(savingsContract.target);
 
+    const PrizeDistribution = await hre.ethers.getContractFactory("PrizeDistribution");
+    const prizeDistribution = await PrizeDistribution.deploy(mockId, savingsContract.target, daoGovernance.target);
+
     await daoGovernance.bindAddress(regulatoryCompliance.target);
     await regulatoryCompliance.bindAddresses(daoGovernance.target, savingsContract.target);
     await nftContract.bindAddress(savingsContract.target);
-    await savingsContract.bindAddress(daoGovernance.target);
+    await savingsContract.bindAddress(daoGovernance.target, prizeDistribution.target);
 
     return { savingsContract, contractToken, regulatoryCompliance, daoGovernance, ONE_YEAR_IN_SECS, stableCoinMintAmount, contractTokenMintAmount, deposit, owner, otherAccount, thirdAccount, fourthAccount, fifthAccount, sixthAccount, seventhAccount, eighthAccount, ninthAccount, tenthAccount, stableToken };
   }
 
   async function daoMembershipFixture() {
-    const { savingsContract, eighthAccount, ninthAccount, tenthAccount, daoGovernance, stableToken } = await loadFixture(deploySavingsContractFixture);
+    const { savingsContract, sixthAccount, seventhAccount, eighthAccount, ninthAccount, tenthAccount, daoGovernance, stableToken, regulatoryCompliance } = await loadFixture(deploySavingsContractFixture);
 
       await stableToken.connect(eighthAccount).approve(savingsContract.target, 8000e6);
       await stableToken.connect(ninthAccount).approve(savingsContract.target, 14000e6);
@@ -80,7 +84,7 @@ describe("SavingsContract", function () {
       await daoGovernance.addMember(ninthAccount.address);
       await daoGovernance.addMember(tenthAccount.address);
 
-      return { savingsContract, eighthAccount, ninthAccount, tenthAccount, daoGovernance, stableToken };
+      return { savingsContract, sixthAccount, seventhAccount, eighthAccount, ninthAccount, tenthAccount, daoGovernance, stableToken, regulatoryCompliance };
   }
 
   async function daoProposalFixture() {
@@ -157,10 +161,33 @@ describe("SavingsContract", function () {
       expect(await regulatoryCompliance.connect(fourthAccount).agreementStatus(fourthAccount)).to.equal(true);
     });
 
-    it("Should send agreement when a user saves more than 3000e6", async function () {
-      const { regulatoryCompliance, fourthAccount } = await loadFixture(daoProposalFixture);
+    it("Should return false for a user with more than 3000e6 and does not accept the acceptAgreement function", async function () {
+      const { savingsContract, regulatoryCompliance, seventhAccount, stableToken } = await loadFixture(deploySavingsContractFixture);
 
-      expect(await regulatoryCompliance.connect(fourthAccount).agreementStatus(fourthAccount)).to.equal(true);
+      await stableToken.connect(seventhAccount).approve(savingsContract.target, 80000e6);
+      await savingsContract.connect(seventhAccount).deposit(25000e6);
+      
+      // await regulatoryCompliance.connect(seventhAccount).acceptAgreement();
+
+      expect(await regulatoryCompliance.connect(seventhAccount).agreementStatus(seventhAccount)).to.equal(false);
+    });
+
+    it("Should send agreement to multiple users when more than one user saves more than 3000e6", async function () {
+      const { savingsContract, regulatoryCompliance, fifthAccount, sixthAccount, seventhAccount, stableToken } = await loadFixture(deploySavingsContractFixture);
+
+      await stableToken.connect(fifthAccount).approve(savingsContract.target, 20000e6);
+      await stableToken.connect(sixthAccount).approve(savingsContract.target, 50000e6);
+      await stableToken.connect(seventhAccount).approve(savingsContract.target, 80000e6);
+      await savingsContract.connect(fifthAccount).deposit(5000e6);
+      await savingsContract.connect(sixthAccount).deposit(15000e6);
+      await savingsContract.connect(seventhAccount).deposit(25000e6);
+      // fifth account is assumed to not accept the agreement thereby not calling the acceptAgreement function
+      await regulatoryCompliance.connect(sixthAccount).acceptAgreement();
+      await regulatoryCompliance.connect(seventhAccount).acceptAgreement();
+
+      expect(await regulatoryCompliance.connect(fifthAccount).agreementStatus(fifthAccount)).to.equal(false);
+      expect(await regulatoryCompliance.connect(sixthAccount).agreementStatus(sixthAccount)).to.equal(true);
+      expect(await regulatoryCompliance.connect(seventhAccount).agreementStatus(seventhAccount)).to.equal(true);
     });
 
     it("Should have a proposal created", async function () {
@@ -181,6 +208,76 @@ describe("SavingsContract", function () {
       expect(await savingsContract.isDAO(eighthAccount.address)).to.equal(true);
       expect(await savingsContract.isDAO(ninthAccount.address)).to.equal(true);
       expect(await savingsContract.isDAO(tenthAccount.address)).to.equal(true);
+    });
+
+    it("Should make a user who has accepted agreement to be voted as DAO", async function () {
+      const { savingsContract, stableToken, regulatoryCompliance, seventhAccount, eighthAccount, ninthAccount, tenthAccount, daoGovernance } = await loadFixture(daoMembershipFixture);
+
+      await stableToken.connect(seventhAccount).approve(savingsContract.target, 80000e6);
+      await savingsContract.connect(seventhAccount).deposit(25000e6);
+      await regulatoryCompliance.connect(seventhAccount).acceptAgreement();
+
+      await daoGovernance.connect(eighthAccount).voteOnProposal(1, true);
+      await daoGovernance.connect(ninthAccount).voteOnProposal(1, false);
+      await daoGovernance.connect(tenthAccount).voteOnProposal(1, true);
+
+      expect(await savingsContract.connect(seventhAccount).isDAO(seventhAccount)).to.equal(true);
+    });
+
+    it("Should make multiple users who has accepted agreement to be voted as DAO", async function () {
+      const { savingsContract, stableToken, regulatoryCompliance, sixthAccount, seventhAccount, eighthAccount, ninthAccount, tenthAccount, daoGovernance } = await loadFixture(daoMembershipFixture);
+
+      await stableToken.connect(sixthAccount).approve(savingsContract.target, 50000e6);
+      await stableToken.connect(seventhAccount).approve(savingsContract.target, 80000e6);
+      await savingsContract.connect(sixthAccount).deposit(25000e6);
+      await savingsContract.connect(seventhAccount).deposit(14000e6);
+      await regulatoryCompliance.connect(sixthAccount).acceptAgreement();
+      await regulatoryCompliance.connect(seventhAccount).acceptAgreement();
+
+      await daoGovernance.connect(eighthAccount).voteOnProposal(1, true);
+      await daoGovernance.connect(ninthAccount).voteOnProposal(1, false);
+      await daoGovernance.connect(tenthAccount).voteOnProposal(1, true);
+      expect(await savingsContract.connect(sixthAccount).isDAO(sixthAccount)).to.equal(true);
+
+      await daoGovernance.connect(eighthAccount).voteOnProposal(2, false);
+      await daoGovernance.connect(ninthAccount).voteOnProposal(2, true);
+      await daoGovernance.connect(tenthAccount).voteOnProposal(2, true);
+      expect(await savingsContract.connect(seventhAccount).isDAO(seventhAccount)).to.equal(true);
+    });
+
+    it("Should make multiple users who has accepted agreement to be voted as DAO or not", async function () {
+      const { savingsContract, stableToken, regulatoryCompliance, sixthAccount, seventhAccount, eighthAccount, ninthAccount, tenthAccount, daoGovernance } = await loadFixture(daoMembershipFixture);
+
+      await stableToken.connect(sixthAccount).approve(savingsContract.target, 50000e6);
+      await stableToken.connect(seventhAccount).approve(savingsContract.target, 80000e6);
+      await savingsContract.connect(sixthAccount).deposit(25000e6);
+      await savingsContract.connect(seventhAccount).deposit(14000e6);
+      await regulatoryCompliance.connect(sixthAccount).acceptAgreement();
+      await regulatoryCompliance.connect(seventhAccount).acceptAgreement();
+
+      await daoGovernance.connect(eighthAccount).voteOnProposal(1, true);
+      await daoGovernance.connect(ninthAccount).voteOnProposal(1, false);
+      await daoGovernance.connect(tenthAccount).voteOnProposal(1, true);
+      expect(await savingsContract.connect(sixthAccount).isDAO(sixthAccount)).to.equal(true);
+
+      await daoGovernance.connect(eighthAccount).voteOnProposal(2, false);
+      await daoGovernance.connect(ninthAccount).voteOnProposal(2, true);
+      await daoGovernance.connect(tenthAccount).voteOnProposal(2, false);
+      expect(await savingsContract.connect(seventhAccount).isDAO(seventhAccount)).to.equal(false);
+    });
+
+    it("Should return false for a user who has accepted agreement but not voted as DAO", async function () {
+      const { savingsContract, stableToken, regulatoryCompliance, seventhAccount, eighthAccount, ninthAccount, tenthAccount, daoGovernance } = await loadFixture(daoMembershipFixture);
+
+      await stableToken.connect(seventhAccount).approve(savingsContract.target, 80000e6);
+      await savingsContract.connect(seventhAccount).deposit(25000e6);
+      await regulatoryCompliance.connect(seventhAccount).acceptAgreement();
+
+      await daoGovernance.connect(eighthAccount).voteOnProposal(1, false);
+      await daoGovernance.connect(ninthAccount).voteOnProposal(1, false);
+      await daoGovernance.connect(tenthAccount).voteOnProposal(1, true);
+
+      expect(await savingsContract.connect(seventhAccount).isDAO(seventhAccount)).to.equal(false);
     });
 
     it("Should return total voting power after making DAOs", async function () {
@@ -208,5 +305,47 @@ describe("SavingsContract", function () {
     //     savingsContract, "ERC20InvalidReceiver"
     //   ).withArgs(zero);
     // });
+  });
+
+  describe('Withdraw', function () {
+    it("Should allow a user withdraw stableToken from savings contract", async function () {
+      const { savingsContract, otherAccount, deposit, stableToken } = await loadFixture(deploySavingsContractFixture);
+
+      await stableToken.connect(otherAccount).approve(savingsContract.target, deposit);
+      await savingsContract.connect(otherAccount).deposit(deposit);
+      await savingsContract.connect(otherAccount).withdraw(deposit);
+      const balance = await savingsContract.getUserBalance(otherAccount);
+      expect(balance.stableCoinBalance).to.equal(0);
+      expect(await stableToken.balanceOf(otherAccount.address)).to.equal(deposit);
+    });
+
+    it("Should allow multiple users withdraw stableToken from savings contract", async function () {
+      const { savingsContract, otherAccount, thirdAccount, fourthAccount, deposit, stableToken } = await loadFixture(deploySavingsContractFixture);
+
+      await stableToken.connect(otherAccount).approve(savingsContract.target, deposit);
+      await stableToken.connect(thirdAccount).approve(savingsContract.target, 3000e6);
+      await stableToken.connect(fourthAccount).approve(savingsContract.target, 5000e6);
+
+      await savingsContract.connect(otherAccount).deposit(deposit);
+      await savingsContract.connect(thirdAccount).deposit(2000e6);
+      await savingsContract.connect(fourthAccount).deposit(3000e6);
+
+      await savingsContract.connect(otherAccount).withdraw(deposit);
+      await savingsContract.connect(fourthAccount).withdraw(2000e6);
+      const balance = await savingsContract.getContractBalance();
+      expect(balance.stableCoinBalance).to.equal(3000e6);
+      expect(await stableToken.balanceOf(otherAccount.address)).to.equal(deposit);
+      expect(await stableToken.balanceOf(thirdAccount.address)).to.equal(3000e6);
+      expect(await stableToken.balanceOf(fourthAccount.address)).to.equal(9000e6);
+    });
+
+    it("Should revert if a user tries to withdraw more than he has", async function () {
+      const { savingsContract, otherAccount, deposit, stableToken } = await loadFixture(deploySavingsContractFixture);
+
+      await stableToken.connect(otherAccount).approve(savingsContract.target, deposit);
+      await savingsContract.connect(otherAccount).deposit(deposit);
+
+      await expect(savingsContract.connect(otherAccount).withdraw(1500e6)).to.be.revertedWith("Insufficient stable coin balance");
+    });
   });
 });
