@@ -97,9 +97,9 @@ contract DAOGovernance is Ownable {
         proposal.voted[msg.sender] = true;
     }
 
-    function getProposalStatus(uint256 proposalId) external view returns (string memory description, uint256 totalVotes, uint256 requiredVotes, bool active) {
+    function getProposalStatus(uint256 proposalId) external view returns (string memory description, uint256 totalVotes, uint256 requiredVotes, uint256 endTime, bool active) {
         Proposal storage proposal = proposals[proposalId];
-        return (proposal.description, proposal.totalVotes, proposal.requiredVotes, proposal.active);
+        return (proposal.description, proposal.totalVotes, proposal.requiredVotes, proposal.endTime, proposal.active);
     }
 
     function addMember(address member) external onlyOwner {
