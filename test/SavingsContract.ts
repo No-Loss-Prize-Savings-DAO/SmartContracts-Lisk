@@ -11,7 +11,8 @@ describe("SavingsContract", function () {
   // We use loadFixture to run this setup once, snapshot that state,
   // and reset Hardhat Network to that snapshot in every test.
   async function deploySavingsContractFixture() {
-    const ONE_YEAR_IN_SECS = 365 * 24 * 60 * 60;
+    const ONE_YEAR_IN_SECS = 366 * 24 * 60 * 60;
+    const unlockTime = (await time.latest()) + ONE_YEAR_IN_SECS;
     const stableCoinMintAmount = 1_000_000_000_000;
     const stableCoinDecimals = 6;
     const contractTokenMintAmount = 1_000_000_000_000_000_000_000_000n;
@@ -66,7 +67,7 @@ describe("SavingsContract", function () {
     await nftContract.bindAddress(savingsContract.target);
     await savingsContract.bindAddress(daoGovernance.target, prizeDistribution.target);
 
-    return { savingsContract, contractToken, regulatoryCompliance, daoGovernance, ONE_YEAR_IN_SECS, stableCoinMintAmount, contractTokenMintAmount, deposit, owner, otherAccount, thirdAccount, fourthAccount, fifthAccount, sixthAccount, seventhAccount, eighthAccount, ninthAccount, tenthAccount, stableToken };
+    return { savingsContract, contractToken, regulatoryCompliance, daoGovernance, ONE_YEAR_IN_SECS, stableCoinMintAmount, contractTokenMintAmount, deposit, unlockTime, owner, otherAccount, thirdAccount, fourthAccount, fifthAccount, sixthAccount, seventhAccount, eighthAccount, ninthAccount, tenthAccount, stableToken };
   }
 
   async function daoMembershipFixture() {
@@ -102,6 +103,16 @@ describe("SavingsContract", function () {
 
     return { savingsContract, regulatoryCompliance, daoGovernance, otherAccount, thirdAccount, fourthAccount, deposit, stableToken };
   }
+
+  describe('Addresses', function () {
+     it("Should log all addresses for reference", async function () {
+      const { owner, otherAccount, contractToken, savingsContract } = await loadFixture(deploySavingsContractFixture);
+      console.log("owner", owner.address);
+      console.log("otherAccount", otherAccount.address);
+      console.log("contract", savingsContract.target);
+      console.log("contractToken", contractToken.target);
+    });
+  });
 
   describe("Deployment", function () {
     it("Should have contractTokenMintAmount as token contract balance", async function () {
@@ -289,22 +300,8 @@ describe("SavingsContract", function () {
     it("Should fail if user tries to deposit without approving savings contract", async function () {
       const { savingsContract, otherAccount, deposit, owner } = await loadFixture(deploySavingsContractFixture);
 
-    console.log("owner", owner.address);
-    console.log("otherAccount", otherAccount.address);
-    console.log("contract", savingsContract.target);
-
-    expect(savingsContract.deposit(deposit)).to.be.revertedWithCustomError;
+      expect(savingsContract.deposit(deposit)).to.be.revertedWithCustomError;
     });
-
-    // it("Should fail if it tries to mint to zero address", async function () {
-    //   // We don't use the fixture here because we want a different deployment
-    //   const { savingsContract, otherAccount, mintAmount } = await loadFixture(deploySavingsContractFixture);
-    //   const zero = ethers.ZeroAddress;
-
-    //   await expect(savingsContract.mint(zero, mintAmount)).to.be.revertedWithCustomError(
-    //     savingsContract, "ERC20InvalidReceiver"
-    //   ).withArgs(zero);
-    // });
   });
 
   describe('Withdraw', function () {
@@ -346,6 +343,128 @@ describe("SavingsContract", function () {
       await savingsContract.connect(otherAccount).deposit(deposit);
 
       await expect(savingsContract.connect(otherAccount).withdraw(1500e6)).to.be.revertedWith("Insufficient stable coin balance");
+    });
+
+    it("Should allow DAO member withdraw so long balance remains above 3000e6", async function () {
+      const { savingsContract, tenthAccount, daoGovernance, stableToken } = await loadFixture(deploySavingsContractFixture);
+
+      await stableToken.connect(tenthAccount).approve(savingsContract.target, 20000e6);
+      await savingsContract.connect(tenthAccount).deposit(20000e6);
+      await daoGovernance.addMember(tenthAccount.address);
+
+      await savingsContract.connect(tenthAccount).withdraw(15000e6);
+
+      const balance = await savingsContract.getUserBalance(tenthAccount);
+      expect(balance.stableCoinBalance).to.equal(5000e6);
+    });
+
+    it("Should revert if DAO tries to withdraw his balance to a value below 3000e6", async function () {
+      const { savingsContract, tenthAccount, daoGovernance, stableToken } = await loadFixture(deploySavingsContractFixture);
+
+      await stableToken.connect(tenthAccount).approve(savingsContract.target, 10000e6);
+      await savingsContract.connect(tenthAccount).deposit(8000e6);
+      await daoGovernance.addMember(tenthAccount.address);
+
+      await expect(savingsContract.connect(tenthAccount).withdraw(6000e6)).to.revertedWith("DAO members must forfeit DAO membership to withdraw funds");
+    });
+
+    it("Should remove user from array after full withdrawal of stableToken", async function () {
+      const { savingsContract, otherAccount, deposit, stableToken } = await loadFixture(deploySavingsContractFixture);
+
+      await stableToken.connect(otherAccount).approve(savingsContract.target, deposit);
+      await savingsContract.connect(otherAccount).deposit(deposit);
+      await savingsContract.connect(otherAccount).withdraw(deposit);
+      const balance = await savingsContract.users(otherAccount);
+      expect(balance.stableCoinBalance).to.equal(0);
+      expect(balance.contractTokenBalance).to.equal(0);
+      expect(balance.slots).to.equal(0);
+      expect(balance.isDAO).to.equal(false);
+      expect(balance.daoLockExpiry).to.equal(0);
+    });
+
+    it("Should revert if DAO tries to forfeit before lockTime expiry", async function () {
+      const { savingsContract, tenthAccount, daoGovernance, stableToken } = await loadFixture(deploySavingsContractFixture);
+
+      await stableToken.connect(tenthAccount).approve(savingsContract.target, 10000e6);
+      await savingsContract.connect(tenthAccount).deposit(8000e6);
+      await daoGovernance.addMember(tenthAccount.address);
+
+      await expect(savingsContract.connect(tenthAccount).forfeitDAO(1)).to.revertedWith("DAO lock period has not expired");
+    });
+
+    it("Should allow DAO to withdraw ANY amount after expiry of lock time", async function () {
+      const { savingsContract, tenthAccount, daoGovernance, stableToken, unlockTime } = await loadFixture(deploySavingsContractFixture);
+
+      await stableToken.connect(tenthAccount).approve(savingsContract.target, 10000e6);
+      await savingsContract.connect(tenthAccount).deposit(8000e6);
+      await daoGovernance.addMember(tenthAccount.address);
+
+      await time.increaseTo(unlockTime);
+      await savingsContract.connect(tenthAccount).forfeitDAO(1);
+      await savingsContract.connect(tenthAccount).withdraw(6000e6)
+
+      const balance = await savingsContract.getUserBalance(tenthAccount);
+      expect(balance.stableCoinBalance).to.equal(2000e6);
+    });
+  });
+
+  describe('transferFund', function () {
+     it("Should revert if called by any user", async function () {
+      const { savingsContract, tenthAccount } = await loadFixture(deploySavingsContractFixture);
+
+      await expect(savingsContract.transferFund(tenthAccount, 2000e6)).to.revertedWith("Only prizeDistribution contract can call this function");
+    });
+  });
+
+  describe('withdrawAmount', function () {
+    it("Should revert if user tries to withdraw", async function () {
+      const { savingsContract, otherAccount, deposit, stableToken } = await loadFixture(deploySavingsContractFixture);
+
+      await stableToken.connect(otherAccount).approve(savingsContract.target, deposit);
+      await savingsContract.connect(otherAccount).deposit(deposit);
+      
+      expect(savingsContract.connect(otherAccount).withdrawAmount(deposit)).to.revertedWithCustomError;
+    });
+
+    it("Should allow owner withdraw specified amount", async function () {
+      const { savingsContract, tenthAccount, stableToken } = await loadFixture(deploySavingsContractFixture);
+
+      await stableToken.connect(tenthAccount).approve(savingsContract.target, 20000e6);
+      await savingsContract.connect(tenthAccount).deposit(20000e6);
+
+      await savingsContract.withdrawAmount(12000e6);
+
+      const balance = await savingsContract.getContractBalance();
+      expect(balance.stableCoinBalance).to.equal(8000e6);
+    });
+
+    it("Should revert if owner tries to withdraw above specified amount", async function () {
+      const { savingsContract, tenthAccount, stableToken } = await loadFixture(deploySavingsContractFixture);
+
+      await stableToken.connect(tenthAccount).approve(savingsContract.target, 20000e6);
+      await savingsContract.connect(tenthAccount).deposit(20000e6);
+
+      await expect(savingsContract.withdrawAmount(15000e6)).to.revertedWith("Withdrawal amount exceeds the maximum allowed");
+    });
+  });
+
+  describe('refundWithdrawnAmount', function () {
+    it("Should revert if user tries to call this function", async function () {
+      const { savingsContract, otherAccount, deposit, stableToken } = await loadFixture(deploySavingsContractFixture);
+
+      await stableToken.connect(otherAccount).approve(savingsContract.target, deposit);
+      
+      expect(savingsContract.connect(otherAccount).refundWithdrawnAmount(deposit)).to.revertedWithCustomError;
+    });
+
+    it("Should allow owner transfer amount", async function () {
+      const { savingsContract, stableToken } = await loadFixture(deploySavingsContractFixture);
+
+      await stableToken.approve(savingsContract.target, 20000e6);
+      await savingsContract.refundWithdrawnAmount(12000e6);
+
+      const balance = await savingsContract.getContractBalance();
+      expect(balance.stableCoinBalance).to.equal(12000e6);
     });
   });
 });
