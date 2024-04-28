@@ -22,7 +22,7 @@ const SavingsContractModule = buildModule("SavingsContractModule", (m) => {
 
   const savingsContract = m.contract("SavingsContract", [stableToken, contractToken, regulatoryCompliance, nftContract]);
   const daoGovernance = m.contract("DAOGovernance", [savingsContract]);
-  const prizeDistribution = m.contract("PrizeDistribution", [9806, savingsContract, daoGovernance]);
+  const prizeDistribution = m.contract("PrizeDistribution", [savingsContract, daoGovernance]);
 
   return { stableToken, contractToken, complianceDatabase, regulatoryCompliance, nftContract, savingsContract, daoGovernance, prizeDistribution};
 });
