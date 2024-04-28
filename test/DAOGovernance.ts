@@ -18,7 +18,6 @@ describe("SavingsContract", function () {
     const contractTokenMintAmount = 1_000_000_000_000_000_000_000_000n;
     const contractTokenDecimals = 18;
     const initialDeposit = 1_000_000_000;
-    const mockId = 12345;
 
     const STABLE_TOKEN_NAME = "USD Tether";
     const STABLE_TOKEN_SYMBOL = "USDT";
@@ -57,7 +56,7 @@ describe("SavingsContract", function () {
     const daoGovernance = await DAOGovernance.deploy(savingsContract.target);
 
     const PrizeDistribution = await hre.ethers.getContractFactory("PrizeDistribution");
-    const prizeDistribution = await PrizeDistribution.deploy(mockId, savingsContract.target, daoGovernance.target);
+    const prizeDistribution = await PrizeDistribution.deploy(savingsContract.target, daoGovernance.target);
 
     await daoGovernance.bindAddress(regulatoryCompliance.target);
     await regulatoryCompliance.bindAddresses(daoGovernance.target, savingsContract.target);
