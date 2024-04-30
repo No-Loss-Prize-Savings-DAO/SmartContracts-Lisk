@@ -19,6 +19,7 @@ contract SavingsContract is Ownable {
     // Contracts
     IRegulatoryCompliance regulatoryCompliance;
     INFTContract nftContract;
+    IDAOGovernance daoGovernance;
     address daoGovernanceAddress;
     address prizeDistributionAddress;
 
@@ -26,6 +27,7 @@ contract SavingsContract is Ownable {
     address[] public userAddresses;
     mapping(address => User) public users;
     mapping(address => bool) private addressExists;
+    mapping(uint256 => bool) amountWithdrawn;
 
     // Contract balance
     uint256 public totalStableCoinBalance;
@@ -44,7 +46,9 @@ contract SavingsContract is Ownable {
     event ContractTokenDeposited(address indexed user, uint256 amount);
     event StableCoinWithdrawn(address indexed user, uint256 amount);
     event ContractTokenWithdrawn(address indexed user, uint256 amount);
-    event ActivityTracker(address indexed user, uint256 amount);
+    event OwnerWithdraw(address indexed user, uint256 proposalId, uint256 amount);
+    event OwnerRefund(address indexed user, uint256 proposalId, uint256 amount);
+    event AirdropDistributed(address indexed recipient, uint256 amount);
 
     constructor(
         address _stableCoinAddress,
@@ -60,12 +64,20 @@ contract SavingsContract is Ownable {
 
     function bindAddress(address _daoGovernanceAddress, address _prizeDistributionAddress) external onlyOwner {
         daoGovernanceAddress = _daoGovernanceAddress;
+        daoGovernance = IDAOGovernance(_daoGovernanceAddress);
         prizeDistributionAddress = _prizeDistributionAddress;
     }
 
     function deposit(uint256 amount) external {
         stableCoin.safeTransferFrom(msg.sender, address(this), amount);
         _depositStableCoin(msg.sender, amount);
+    }
+
+    function depositContractToken(uint256 amount) external {
+        contractToken.safeTransferFrom(msg.sender, address(this), amount);
+        users[msg.sender].contractTokenBalance += amount;
+        totalContractTokenBalance += amount;
+        emit ContractTokenDeposited(msg.sender, amount);
     }
 
     function withdraw(uint256 amount) external {
@@ -181,7 +193,7 @@ contract SavingsContract is Ownable {
         return users[user].isDAO;
     }
 
-    function getUserBalance(address user) external view returns (uint256 stableCoinBalance, uint256 contractTokenBalance) {
+    function getUserBalance(address user) public view returns (uint256 stableCoinBalance, uint256 contractTokenBalance) {
         return (users[user].stableCoinBalance, users[user].contractTokenBalance);
     }
 
@@ -189,19 +201,49 @@ contract SavingsContract is Ownable {
         return (totalStableCoinBalance, totalContractTokenBalance);
     }
 
-    function withdrawAmount(uint256 amount) external onlyOwner() {
+    function withdrawAmount(uint256 proposalId, uint256 amount) external onlyOwner() {
         uint256 maxWithdrawalAmount = (totalStableCoinBalance * 60) / 100;
         require(amount <= maxWithdrawalAmount, "Withdrawal amount exceeds the maximum allowed");
         require(totalStableCoinBalance >= amount, "Insufficient stableToken balance in contract");
+        ( , , , , , bool acceptWithdrawal) = daoGovernance.getProposalStatus(proposalId);
+        require(!(amountWithdrawn[proposalId]), "Amount already withdrawn for this proposal");
+        require(acceptWithdrawal, "Proposal was not accepted");
 
         totalStableCoinBalance -= amount;
+        amountWithdrawn[proposalId] = true;
         stableCoin.safeTransfer(msg.sender, amount);
-        emit ActivityTracker(msg.sender, amount);
+        emit OwnerWithdraw(msg.sender, proposalId, amount);
     }
 
-    function refundWithdrawnAmount(uint256 amount) external onlyOwner() {
+    function refundWithdrawnAmount(uint256 proposalId, uint256 amount) external onlyOwner() {
         totalStableCoinBalance += amount;
         stableCoin.safeTransferFrom(msg.sender, address(this), amount);
-        emit ActivityTracker(msg.sender, amount);
+        emit OwnerRefund(msg.sender, proposalId, amount);
+    }
+
+    function distributeAirdrop(uint256 amount, address[] calldata airdropWinners) external onlyOwner {
+        uint256 totalSlots = 0;
+        // Calculate total slots
+        for (uint256 i = 0; i < airdropWinners.length; i++) {
+            address member = airdropWinners[i];
+            (uint256 balance, ) = getUserBalance(member);
+            // For every $20 deposited, the user has one slot
+            uint256 slots = balance / 20e6;
+            totalSlots += slots;
+        }
+
+        // Calculate the amount per slot
+        uint256 amountPerSlot = amount / totalSlots;
+
+        // Distribute the airdrop amount to each user based on their slots
+        for (uint256 i = 0; i < airdropWinners.length; i++) {
+            address member = airdropWinners[i];
+            (uint256 balance, ) = getUserBalance(member);
+            uint256 slots = balance / 20e6;
+            uint256 allocatedAirdrop = amountPerSlot * slots;
+            contractToken.safeTransfer(member, allocatedAirdrop);
+
+            emit AirdropDistributed(member, allocatedAirdrop);
+        }
     }
 }

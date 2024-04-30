@@ -10,7 +10,7 @@ contract BLZ is ERC20, Ownable {
     uint8 _decimals = 18;
 
     constructor() ERC20(_name, _symbol) Ownable(msg.sender) {
-        _mint(msg.sender, 600000000 * 10 ** _decimals);
+        _mint(msg.sender, 400000000 * 10 ** _decimals);
     }
 
     function mint(address to, uint256 amount) public onlyOwner {

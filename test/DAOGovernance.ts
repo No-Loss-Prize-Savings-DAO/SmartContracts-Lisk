@@ -115,6 +115,7 @@ describe("SavingsContract", function () {
         expect(proposal.requiredVotes).to.equal(8);
         expect(proposal.endTime).to.equal(await time.latest() + (3 * 24 * 60 * 60));
         expect(proposal.active).to.equal(true);
+        expect(proposal.acceptWithdrawal).to.equal(false);
     });
 
     it("Should revert if invalid time is inputed", async function () {

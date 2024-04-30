@@ -8,7 +8,7 @@ interface IDAOGovernance {
 
     function voteOnProposal(uint256 proposalId, bool support) external;
 
-    function getProposalStatus(uint256 proposalId) external view returns (string memory description, uint256 totalVotes, uint256 requiredVotes, bool active);
+    function getProposalStatus(uint256 proposalId) external view returns (string memory description, uint256 totalVotes, uint256 requiredVotes, uint256 endTime, bool active, bool acceptWithdrawal);
 
     function addMember(address member) external;
 

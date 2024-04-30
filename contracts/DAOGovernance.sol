@@ -12,6 +12,8 @@ contract DAOGovernance is Ownable {
         uint256 requiredVotes;
         uint256 endTime;
         bool active;
+        bool acceptWithdrawal;
+        bool amountWithdrawn;
         mapping(address => bool) voted;
     }
 
@@ -68,6 +70,7 @@ contract DAOGovernance is Ownable {
         proposal.requiredVotes = totalVotingPower * 2 / 3;
         proposal.endTime = endTime;
         proposal.active = true;
+        proposal.acceptWithdrawal = false;
         emit ProposalCreated(proposalId, description);
     }
 
@@ -89,6 +92,7 @@ contract DAOGovernance is Ownable {
                 if (keccak256(bytes(proposal.description)) == keccak256(bytes("New DAO Membership Proposal"))) {
                     _addMember(proposal.proposer);
                 } else {
+                    proposal.acceptWithdrawal = true;
                     acceptedDAO = proposal.proposer;
                 }
                 emit ProposalPassed(proposalId);
@@ -97,9 +101,9 @@ contract DAOGovernance is Ownable {
         proposal.voted[msg.sender] = true;
     }
 
-    function getProposalStatus(uint256 proposalId) external view returns (string memory description, uint256 totalVotes, uint256 requiredVotes, uint256 endTime, bool active) {
+    function getProposalStatus(uint256 proposalId) external view returns (string memory description, uint256 totalVotes, uint256 requiredVotes, uint256 endTime, bool active, bool acceptWithdrawal) {
         Proposal storage proposal = proposals[proposalId];
-        return (proposal.description, proposal.totalVotes, proposal.requiredVotes, proposal.endTime, proposal.active);
+        return (proposal.description, proposal.totalVotes, proposal.requiredVotes, proposal.endTime, proposal.active, proposal.acceptWithdrawal);
     }
 
     function addMember(address member) external onlyOwner {

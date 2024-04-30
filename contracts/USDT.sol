@@ -10,7 +10,7 @@ contract USDT is ERC20, Ownable {
     uint8 _decimals = 6;
 
     constructor() ERC20(_name, _symbol) Ownable(msg.sender) {
-        _mint(msg.sender, 1000000 * 10 ** _decimals);
+        _mint(msg.sender, 30000000 * 10 ** _decimals);
     }
 
     function decimals() public pure override returns(uint8){
