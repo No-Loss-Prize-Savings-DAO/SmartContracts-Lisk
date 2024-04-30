@@ -14,21 +14,14 @@ describe("SavingsContract", function () {
     const ONE_YEAR_IN_SECS = 366 * 24 * 60 * 60;
     const unlockTime = (await time.latest()) + ONE_YEAR_IN_SECS;
     const stableCoinMintAmount = 1_000_000_000_000;
-    const stableCoinDecimals = 6;
-    const contractTokenMintAmount = 1_000_000_000_000_000_000_000_000n;
-    const contractTokenDecimals = 18;
+    const contractTokenInitialAmount = 500_000_000_000_000_000_000_000n;
     const deposit = 1_000_000_000;
-
-    const STABLE_TOKEN_NAME = "USD Tether";
-    const STABLE_TOKEN_SYMBOL = "USDT";
-    const CONTRACT_TOKEN_NAME = "Blitz";
-    const CONTRACT_TOKEN_SYMBOL = "BLZ";
 
     // Contracts are deployed using the first signer/account by default
     const [owner, otherAccount, thirdAccount, fourthAccount, fifthAccount, sixthAccount, seventhAccount, eighthAccount, ninthAccount, tenthAccount] = await hre.ethers.getSigners();
 
-    const StableToken = await hre.ethers.getContractFactory("FactoryERC20");
-    const stableToken = await StableToken.deploy(STABLE_TOKEN_NAME, STABLE_TOKEN_SYMBOL, stableCoinDecimals);
+    const StableToken = await hre.ethers.getContractFactory("USDT");
+    const stableToken = await StableToken.deploy();
     await stableToken.transfer(otherAccount, 1_000_000_000);
     await stableToken.transfer(thirdAccount, 5_000_000_000);
     await stableToken.transfer(fourthAccount, 10_000_000_000);
@@ -39,8 +32,11 @@ describe("SavingsContract", function () {
     await stableToken.transfer(ninthAccount, 250_000_000_000);
     await stableToken.transfer(tenthAccount, 300_000_000_000);
 
-    const ContractToken = await hre.ethers.getContractFactory("FactoryERC20");
-    const contractToken = await ContractToken.deploy(CONTRACT_TOKEN_NAME, CONTRACT_TOKEN_SYMBOL, contractTokenDecimals);
+    const ContractToken = await hre.ethers.getContractFactory("BLZ");
+    const contractToken = await ContractToken.deploy();
+    await contractToken.transfer(owner, 400_000_000_000_000_000_000_000n);
+    await contractToken.transfer(otherAccount, 50_000_000_000_000_000_000_000n);
+    await contractToken.transfer(thirdAccount, 50_000_000_000_000_000_000_000n);
 
     const ComplianceDatabase = await hre.ethers.getContractFactory("ComplianceDatabase");
     const complianceDatabase = await ComplianceDatabase.deploy();
@@ -53,7 +49,7 @@ describe("SavingsContract", function () {
 
     const SavingsContract = await hre.ethers.getContractFactory("SavingsContract");
     const savingsContract = await SavingsContract.deploy(stableToken.target, contractToken.target, regulatoryCompliance.target, nftContract.target);
-    await contractToken.transfer(savingsContract.target, contractTokenMintAmount);
+    await contractToken.transfer(savingsContract.target, contractTokenInitialAmount); // This wouldn't be done in real time as funds will remain in owner's wallet for distribution.
 
     const DAOGovernance = await hre.ethers.getContractFactory("DAOGovernance");
     const daoGovernance = await DAOGovernance.deploy(savingsContract.target);
@@ -66,11 +62,11 @@ describe("SavingsContract", function () {
     await nftContract.bindAddress(savingsContract.target);
     await savingsContract.bindAddress(daoGovernance.target, prizeDistribution.target);
 
-    return { savingsContract, contractToken, regulatoryCompliance, daoGovernance, ONE_YEAR_IN_SECS, stableCoinMintAmount, contractTokenMintAmount, deposit, unlockTime, owner, otherAccount, thirdAccount, fourthAccount, fifthAccount, sixthAccount, seventhAccount, eighthAccount, ninthAccount, tenthAccount, stableToken };
+    return { savingsContract, contractToken, regulatoryCompliance, daoGovernance, ONE_YEAR_IN_SECS, stableCoinMintAmount, contractTokenInitialAmount, deposit, unlockTime, owner, otherAccount, thirdAccount, fourthAccount, fifthAccount, sixthAccount, seventhAccount, eighthAccount, ninthAccount, tenthAccount, stableToken };
   }
 
   async function daoMembershipFixture() {
-    const { savingsContract, sixthAccount, seventhAccount, eighthAccount, ninthAccount, tenthAccount, daoGovernance, stableToken, regulatoryCompliance } = await loadFixture(deploySavingsContractFixture);
+    const { savingsContract, deposit, otherAccount, sixthAccount, seventhAccount, eighthAccount, ninthAccount, tenthAccount, daoGovernance, stableToken, regulatoryCompliance } = await loadFixture(deploySavingsContractFixture);
 
       await stableToken.connect(eighthAccount).approve(savingsContract.target, 8000e6);
       await stableToken.connect(ninthAccount).approve(savingsContract.target, 14000e6);
@@ -84,7 +80,7 @@ describe("SavingsContract", function () {
       await daoGovernance.addMember(ninthAccount.address);
       await daoGovernance.addMember(tenthAccount.address);
 
-      return { savingsContract, sixthAccount, seventhAccount, eighthAccount, ninthAccount, tenthAccount, daoGovernance, stableToken, regulatoryCompliance };
+      return { savingsContract, deposit, otherAccount, sixthAccount, seventhAccount, eighthAccount, ninthAccount, tenthAccount, daoGovernance, stableToken, regulatoryCompliance };
   }
 
   async function daoProposalFixture() {
@@ -114,10 +110,10 @@ describe("SavingsContract", function () {
   });
 
   describe("Deployment", function () {
-    it("Should have contractTokenMintAmount as token contract balance", async function () {
-      const { savingsContract, contractTokenMintAmount, contractToken } = await loadFixture(deploySavingsContractFixture);
+    it("Should have contractTokenInitialAmount as token contract balance", async function () {
+      const { savingsContract, contractTokenInitialAmount, contractToken } = await loadFixture(deploySavingsContractFixture);
 
-      expect(await contractToken.balanceOf(savingsContract.target)).to.equal(contractTokenMintAmount);
+      expect(await contractToken.balanceOf(savingsContract.target)).to.equal(contractTokenInitialAmount);
     });
 
     it("Should have transferred deposit to other accounts", async function () {
@@ -303,6 +299,47 @@ describe("SavingsContract", function () {
     });
   });
 
+  describe("depositContractToken", function () {
+    it("Should allow a user deposit BLZ to savings contract", async function () {
+      const { savingsContract, contractToken, otherAccount } = await loadFixture(deploySavingsContractFixture);
+
+      await contractToken.connect(otherAccount).approve(savingsContract.target, 30_000_000_000_000_000_000_000n);
+      await savingsContract.connect(otherAccount).depositContractToken(30_000_000_000_000_000_000_000n);
+
+      const userBalance = await savingsContract.getUserBalance(otherAccount);
+      expect(userBalance.contractTokenBalance).to.equal(30_000_000_000_000_000_000_000n);
+
+      const contractBalance = await savingsContract.getContractBalance();
+      expect(contractBalance.contractTokenBalance).to.equal(30_000_000_000_000_000_000_000n);
+    });
+
+    it("Should allow multiple users deposit BLZ to savings contract", async function () {
+      const { savingsContract, otherAccount, thirdAccount, contractToken } = await loadFixture(deploySavingsContractFixture);
+
+      await contractToken.connect(otherAccount).approve(savingsContract.target, 30_000_000_000_000_000_000_000n);
+      await contractToken.connect(thirdAccount).approve(savingsContract.target, 20_000_000_000_000_000_000_000n);
+
+      await savingsContract.connect(thirdAccount).depositContractToken(20_000_000_000_000_000_000_000n);
+      await savingsContract.connect(otherAccount).depositContractToken(30_000_000_000_000_000_000_000n);
+
+      const otherAccountBalance = await savingsContract.getUserBalance(otherAccount);
+      const thirdAccountBalance = await savingsContract.getUserBalance(thirdAccount);
+
+      expect(otherAccountBalance.contractTokenBalance).to.equal(30_000_000_000_000_000_000_000n);
+      expect(thirdAccountBalance.contractTokenBalance).to.equal(20_000_000_000_000_000_000_000n);
+      
+      expect(await contractToken.balanceOf(savingsContract.target)).to.equal(550_000_000_000_000_000_000_000n);
+      const contractTokenBal = await savingsContract.getContractBalance();
+      expect(contractTokenBal.contractTokenBalance).to.equal(50_000_000_000_000_000_000_000n);
+    });
+
+    it("Should fail if user tries to deposit without approving savings contract", async function () {
+      const { savingsContract, thirdAccount } = await loadFixture(deploySavingsContractFixture);
+
+      expect(savingsContract.connect(thirdAccount).depositContractToken(20_000_000_000_000_000_000_000n)).to.be.revertedWithCustomError;
+    });
+  });
+
   describe('Withdraw', function () {
     it("Should allow a user withdraw stableToken from savings contract", async function () {
       const { savingsContract, otherAccount, deposit, stableToken } = await loadFixture(deploySavingsContractFixture);
@@ -407,6 +444,47 @@ describe("SavingsContract", function () {
     });
   });
 
+  describe('withdrawContractToken', function () {
+    it("Should allow a user withdraw contractToken from savings contract", async function () {
+      const { savingsContract, otherAccount, deposit, contractToken } = await loadFixture(deploySavingsContractFixture);
+
+      await contractToken.connect(otherAccount).approve(savingsContract.target, 40_000_000_000_000_000_000_000n);
+      await savingsContract.connect(otherAccount).depositContractToken(40_000_000_000_000_000_000_000n);
+      await savingsContract.connect(otherAccount).withdrawContractToken(10_000_000_000_000_000_000_000n);
+      const balance = await savingsContract.getUserBalance(otherAccount);
+      expect(balance.contractTokenBalance).to.equal(30_000_000_000_000_000_000_000n);
+      expect(await contractToken.balanceOf(otherAccount.address)).to.equal(20_000_000_000_000_000_000_000n);
+    });
+
+    it("Should allow multiple users withdraw contractToken from savings contract", async function () {
+      const { savingsContract, otherAccount, thirdAccount, contractToken } = await loadFixture(deploySavingsContractFixture);
+
+      await contractToken.connect(otherAccount).approve(savingsContract.target, 50_000_000_000_000_000_000_000n);
+      await contractToken.connect(thirdAccount).approve(savingsContract.target, 50_000_000_000_000_000_000_000n);
+
+      await savingsContract.connect(otherAccount).depositContractToken(40_000_000_000_000_000_000_000n);
+      await savingsContract.connect(thirdAccount).depositContractToken(30_000_000_000_000_000_000_000n);
+
+      await savingsContract.connect(otherAccount).withdrawContractToken(30_000_000_000_000_000_000_000n);
+      await savingsContract.connect(thirdAccount).withdrawContractToken(10_000_000_000_000_000_000_000n);
+
+      const balance = await savingsContract.getContractBalance();
+      expect(balance.contractTokenBalance).to.equal(30_000_000_000_000_000_000_000n);
+
+      expect(await contractToken.balanceOf(otherAccount.address)).to.equal(40_000_000_000_000_000_000_000n);
+      expect(await contractToken.balanceOf(thirdAccount.address)).to.equal(30_000_000_000_000_000_000_000n);
+    });
+
+    it("Should revert if a user tries to withdraw more than he has", async function () {
+      const { savingsContract, otherAccount, deposit, contractToken } = await loadFixture(deploySavingsContractFixture);
+
+      await contractToken.connect(otherAccount).approve(savingsContract.target, 50_000_000_000_000_000_000_000n);
+      await savingsContract.connect(otherAccount).depositContractToken(20_000_000_000_000_000_000_000n);
+
+      await expect(savingsContract.connect(otherAccount).withdrawContractToken(30_000_000_000_000_000_000_000n)).to.be.revertedWith("Insufficient contract token balance");
+    });
+  });
+
   describe('transferFund', function () {
      it("Should revert if called by any user", async function () {
       const { savingsContract, tenthAccount } = await loadFixture(deploySavingsContractFixture);
@@ -417,33 +495,69 @@ describe("SavingsContract", function () {
 
   describe('withdrawAmount', function () {
     it("Should revert if user tries to withdraw", async function () {
-      const { savingsContract, otherAccount, deposit, stableToken } = await loadFixture(deploySavingsContractFixture);
+      const { savingsContract, otherAccount, eighthAccount, ninthAccount, tenthAccount, daoGovernance, deposit, stableToken } = await loadFixture(daoMembershipFixture);
 
       await stableToken.connect(otherAccount).approve(savingsContract.target, deposit);
       await savingsContract.connect(otherAccount).deposit(deposit);
+
+      await daoGovernance.connect(tenthAccount).proposeActivity("I will like us to look into spot trading on bybit", 3 * 24 * 60 * 60);
+      await daoGovernance.connect(tenthAccount).voteOnProposal(1, true);
+      await daoGovernance.connect(ninthAccount).voteOnProposal(1, false);
+      await daoGovernance.connect(eighthAccount).voteOnProposal(1, true);
       
-      expect(savingsContract.connect(otherAccount).withdrawAmount(deposit)).to.revertedWithCustomError;
+      expect(savingsContract.connect(otherAccount).withdrawAmount(1, deposit)).to.revertedWithCustomError;
     });
 
     it("Should allow owner withdraw specified amount", async function () {
-      const { savingsContract, tenthAccount, stableToken } = await loadFixture(deploySavingsContractFixture);
+      const { savingsContract, ninthAccount, tenthAccount, daoGovernance } = await loadFixture(daoMembershipFixture);
+
+      await daoGovernance.connect(tenthAccount).proposeActivity("I will like us to look into spot trading on bybit", 3 * 24 * 60 * 60);
+      await daoGovernance.connect(ninthAccount).voteOnProposal(1, true);
+      await daoGovernance.connect(tenthAccount).voteOnProposal(1, true);
+
+      await savingsContract.withdrawAmount(1, 22000e6);
+
+      const balance = await savingsContract.getContractBalance();
+      expect(balance.stableCoinBalance).to.equal(20000e6);
+    });
+
+    it("Should revert if owner tries to withdraw again for same proposal", async function () {
+      const { savingsContract, ninthAccount, tenthAccount, daoGovernance } = await loadFixture(daoMembershipFixture);
+
+      await daoGovernance.connect(tenthAccount).proposeActivity("I will like us to look into spot trading on bybit", 3 * 24 * 60 * 60);
+      await daoGovernance.connect(ninthAccount).voteOnProposal(1, true);
+      await daoGovernance.connect(tenthAccount).voteOnProposal(1, true);
+
+      await savingsContract.withdrawAmount(1, 15000e6);
+
+      await expect(savingsContract.withdrawAmount(1, 12000e6)).to.revertedWith("Amount already withdrawn for this proposal");
+    });
+
+    it("Should revert if proposal was not accepted", async function () {
+      const { savingsContract, eighthAccount, ninthAccount, tenthAccount, daoGovernance, stableToken } = await loadFixture(daoMembershipFixture);
 
       await stableToken.connect(tenthAccount).approve(savingsContract.target, 20000e6);
       await savingsContract.connect(tenthAccount).deposit(20000e6);
 
-      await savingsContract.withdrawAmount(12000e6);
+      await daoGovernance.connect(tenthAccount).proposeActivity("I will like us to look into spot trading on bybit", 3 * 24 * 60 * 60);
+      await daoGovernance.connect(eighthAccount).voteOnProposal(1, true);
+      await daoGovernance.connect(ninthAccount).voteOnProposal(1, true);
+      await daoGovernance.connect(tenthAccount).voteOnProposal(1, false);
 
-      const balance = await savingsContract.getContractBalance();
-      expect(balance.stableCoinBalance).to.equal(8000e6);
+      await expect(savingsContract.withdrawAmount(1, 12000e6)).to.revertedWith("Proposal was not accepted");
     });
 
     it("Should revert if owner tries to withdraw above specified amount", async function () {
-      const { savingsContract, tenthAccount, stableToken } = await loadFixture(deploySavingsContractFixture);
+      const { savingsContract, ninthAccount, tenthAccount, daoGovernance, stableToken } = await loadFixture(daoMembershipFixture);
 
       await stableToken.connect(tenthAccount).approve(savingsContract.target, 20000e6);
       await savingsContract.connect(tenthAccount).deposit(20000e6);
 
-      await expect(savingsContract.withdrawAmount(15000e6)).to.revertedWith("Withdrawal amount exceeds the maximum allowed");
+      await daoGovernance.connect(tenthAccount).proposeActivity("I will like us to look into spot trading on bybit", 3 * 24 * 60 * 60);
+      await daoGovernance.connect(ninthAccount).voteOnProposal(1, true);
+      await daoGovernance.connect(tenthAccount).voteOnProposal(1, true);
+
+      await expect(savingsContract.withdrawAmount(1, 38000e6)).to.revertedWith("Withdrawal amount exceeds the maximum allowed");
     });
   });
 
@@ -453,17 +567,58 @@ describe("SavingsContract", function () {
 
       await stableToken.connect(otherAccount).approve(savingsContract.target, deposit);
       
-      expect(savingsContract.connect(otherAccount).refundWithdrawnAmount(deposit)).to.revertedWithCustomError;
+      expect(savingsContract.connect(otherAccount).refundWithdrawnAmount(1, deposit)).to.revertedWithCustomError;
     });
 
     it("Should allow owner transfer amount", async function () {
       const { savingsContract, stableToken } = await loadFixture(deploySavingsContractFixture);
 
       await stableToken.approve(savingsContract.target, 20000e6);
-      await savingsContract.refundWithdrawnAmount(12000e6);
+      await savingsContract.refundWithdrawnAmount(1, 12000e6);
 
       const balance = await savingsContract.getContractBalance();
       expect(balance.stableCoinBalance).to.equal(12000e6);
+    });
+  });
+
+  describe('distributeAirdrop', function () {
+    it("Should allow airdrop BLZ to users", async function () {
+      const { savingsContract, otherAccount, thirdAccount, fourthAccount, stableToken, contractToken } = await loadFixture(deploySavingsContractFixture);
+
+      await stableToken.connect(otherAccount).approve(savingsContract.target, 1_000_000_000);
+      await stableToken.connect(thirdAccount).approve(savingsContract.target, 5_000_000_000);
+      await stableToken.connect(fourthAccount).approve(savingsContract.target, 10_000_000_000);
+
+      await savingsContract.connect(otherAccount).deposit(500_000_000);
+      await savingsContract.connect(thirdAccount).deposit(200_000_000);
+      await savingsContract.connect(fourthAccount).deposit(100_000_000);
+
+      await savingsContract.distributeAirdrop(100_000_000_000_000_000_000_000n, [otherAccount, thirdAccount, fourthAccount]);
+
+      const otherAccountBalance = await contractToken.balanceOf(otherAccount);
+      const thirdAccountBalance = await contractToken.balanceOf(thirdAccount);
+      const fourthAccountBalance = await contractToken.balanceOf(fourthAccount);
+
+      // each user gets 2_500_000_000_000_000_000_000n per slots
+      expect(otherAccountBalance).to.equal(112_500_000_000_000_000_000_000n); // Note this user previously has 50_000_000_000_000_000_000_000n BLZ
+      expect(thirdAccountBalance).to.equal(75_000_000_000_000_000_000_000n); // Note this user previously has 50_000_000_000_000_000_000_000n BLZ
+      expect(fourthAccountBalance).to.equal(12_500_000_000_000_000_000_000n);
+    });
+
+    it("Should revert if a user tries to call this function", async function () {
+      const { savingsContract, otherAccount, thirdAccount, fourthAccount, stableToken } = await loadFixture(deploySavingsContractFixture);
+
+      await stableToken.connect(otherAccount).approve(savingsContract.target, 1_000_000_000);
+      await stableToken.connect(thirdAccount).approve(savingsContract.target, 5_000_000_000);
+      await stableToken.connect(fourthAccount).approve(savingsContract.target, 10_000_000_000);
+
+      await savingsContract.connect(otherAccount).deposit(500_000_000);
+      await savingsContract.connect(thirdAccount).deposit(200_000_000);
+      await savingsContract.connect(fourthAccount).deposit(100_000_000);
+
+      const winners = [otherAccount, thirdAccount, fourthAccount];
+
+      expect(savingsContract.distributeAirdrop(100_000_000_000_000_000_000_000n, winners)).to.be.revertedWithCustomError;
     });
   });
 });
