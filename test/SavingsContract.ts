@@ -230,6 +230,40 @@ describe("SavingsContract", function () {
       expect(await savingsContract.connect(seventhAccount).isDAO(seventhAccount)).to.equal(true);
     });
 
+    it("Should not send agreement more than once to the same user", async function () {
+      const { savingsContract, stableToken, regulatoryCompliance, seventhAccount, eighthAccount, ninthAccount, tenthAccount, daoGovernance } = await loadFixture(daoMembershipFixture);
+
+      await stableToken.connect(seventhAccount).approve(savingsContract.target, 80000e6);
+      await savingsContract.connect(seventhAccount).deposit(3500e6);
+      await regulatoryCompliance.connect(seventhAccount).acceptAgreement();
+
+      await daoGovernance.connect(eighthAccount).voteOnProposal(1, true);
+      await daoGovernance.connect(ninthAccount).voteOnProposal(1, false);
+      await daoGovernance.connect(tenthAccount).voteOnProposal(1, true);
+
+      await savingsContract.connect(seventhAccount).deposit(3000e6);
+
+      await expect(regulatoryCompliance.connect(seventhAccount).acceptAgreement()).to.be.revertedWith("Agreement already accepted");
+    });
+
+    it("Should set agreementSent as false for users with less than 3000 usdt", async function () {
+      const { savingsContract, stableToken, seventhAccount } = await loadFixture(daoMembershipFixture);
+
+      await stableToken.connect(seventhAccount).approve(savingsContract.target, 80000e6);
+      await savingsContract.connect(seventhAccount).deposit(2500e6);
+
+      expect(await savingsContract.connect(seventhAccount).isAgreementSent(seventhAccount)).to.equal(false);
+    });
+
+    it("Should set agreementSent as true for users with more than 3000 usdt", async function () {
+      const { savingsContract, stableToken, seventhAccount } = await loadFixture(daoMembershipFixture);
+
+      await stableToken.connect(seventhAccount).approve(savingsContract.target, 80000e6);
+      await savingsContract.connect(seventhAccount).deposit(4000e6);
+
+      expect(await savingsContract.connect(seventhAccount).isAgreementSent(seventhAccount)).to.equal(true);
+    });
+
     it("Should make multiple users who has accepted agreement to be voted as DAO", async function () {
       const { savingsContract, stableToken, regulatoryCompliance, sixthAccount, seventhAccount, eighthAccount, ninthAccount, tenthAccount, daoGovernance } = await loadFixture(daoMembershipFixture);
 
