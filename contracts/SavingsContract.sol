@@ -28,6 +28,7 @@ contract SavingsContract is Ownable {
     mapping(address => User) public users;
     mapping(address => bool) private addressExists;
     mapping(uint256 => bool) amountWithdrawn;
+    mapping(address => bool) agreementSent;
 
     // Contract balance
     uint256 public totalStableCoinBalance;
@@ -49,6 +50,7 @@ contract SavingsContract is Ownable {
     event OwnerWithdraw(address indexed user, uint256 proposalId, uint256 amount);
     event OwnerRefund(address indexed user, uint256 proposalId, uint256 amount);
     event AirdropDistributed(address indexed recipient, uint256 amount);
+    event AgreementSent(address indexed user);
 
     constructor(
         address _stableCoinAddress,
@@ -115,9 +117,11 @@ contract SavingsContract is Ownable {
         totalStableCoinBalance += amount;
         users[user].slots = users[user].stableCoinBalance / 100e6;
 
-        if (!users[user].isDAO && users[user].stableCoinBalance >= 3000e6) {
+        if (!users[user].isDAO && users[user].stableCoinBalance >= 3000e6 && !agreementSent[user]) {
             regulatoryCompliance.sendAgreements("New DAO");
             users[user].daoLockExpiry = block.timestamp + (1 * 365 days);
+            agreementSent[user] = true;
+            emit AgreementSent(user);
         }
         emit StableCoinDeposited(user, amount);
     }
@@ -191,6 +195,10 @@ contract SavingsContract is Ownable {
 
     function isDAO(address user) external view returns (bool) {
         return users[user].isDAO;
+    }
+
+    function isAgreementSent(address user) external view returns (bool) {
+        return agreementSent[user];
     }
 
     function getUserBalance(address user) public view returns (uint256 stableCoinBalance, uint256 contractTokenBalance) {
