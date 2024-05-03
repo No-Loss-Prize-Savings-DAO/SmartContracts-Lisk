@@ -1,0 +1,8 @@
+{
+  "sepolia": {
+    "Savings": {
+      "address": "0x8b886B6d3FB17c56645F073DD41981f607c1B096",
+      "startBlock": 5827569
+    }
+  }
+}

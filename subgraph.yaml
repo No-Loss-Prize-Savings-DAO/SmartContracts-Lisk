@@ -1,0 +1,50 @@
+specVersion: 1.0.0
+indexerHints:
+  prune: auto
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: Savings
+    network: sepolia
+    source:
+      address: "0x8b886B6d3FB17c56645F073DD41981f607c1B096"
+      abi: Savings
+      startBlock: 5827569
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - AgreementSent
+        - AirdropDistributed
+        - ContractTokenDeposited
+        - ContractTokenWithdrawn
+        - OwnerRefund
+        - OwnerWithdraw
+        - OwnershipTransferred
+        - StableCoinDeposited
+        - StableCoinWithdrawn
+      abis:
+        - name: Savings
+          file: ./abis/Savings.json
+      eventHandlers:
+        - event: AgreementSent(indexed address)
+          handler: handleAgreementSent
+        - event: AirdropDistributed(indexed address,uint256)
+          handler: handleAirdropDistributed
+        - event: ContractTokenDeposited(indexed address,uint256)
+          handler: handleContractTokenDeposited
+        - event: ContractTokenWithdrawn(indexed address,uint256)
+          handler: handleContractTokenWithdrawn
+        - event: OwnerRefund(indexed address,uint256,uint256)
+          handler: handleOwnerRefund
+        - event: OwnerWithdraw(indexed address,uint256,uint256)
+          handler: handleOwnerWithdraw
+        - event: OwnershipTransferred(indexed address,indexed address)
+          handler: handleOwnershipTransferred
+        - event: StableCoinDeposited(indexed address,uint256)
+          handler: handleStableCoinDeposited
+        - event: StableCoinWithdrawn(indexed address,uint256)
+          handler: handleStableCoinWithdrawn
+      file: ./src/savings.ts
