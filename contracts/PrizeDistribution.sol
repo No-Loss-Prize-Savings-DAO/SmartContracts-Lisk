@@ -29,6 +29,7 @@ contract PrizeDistribution is VRFV2WrapperConsumerBase, ConfirmedOwner {
     // past requests Id.
     uint256[] public requestIds;
     uint256 public lastRequestId;
+    uint256 lastRequestTime;
 
     // Depends on the number of requested values that you want sent to the
     // fulfillRandomWords() function. Test and adjust
@@ -42,7 +43,7 @@ contract PrizeDistribution is VRFV2WrapperConsumerBase, ConfirmedOwner {
 
     // For this example, retrieve 2 random values in one request.
     // Cannot exceed VRFV2Wrapper.getConfig().maxNumWords.
-    uint32 numWords = 5;
+    uint32 numWords;
 
     // Address LINK - hardcoded for Sepolia
     address linkAddress = 0x779877A7B0D9E8603169DdbD7836e478b4624789;
@@ -51,9 +52,11 @@ contract PrizeDistribution is VRFV2WrapperConsumerBase, ConfirmedOwner {
     address wrapperAddress = 0xab18414CD93297B0d12ac29E63Ca20f515b3DB46;
 
     address[] public winners;
-    uint256 contractSharePercentage = 30;
+    address savingsContractAddress;
+    uint256 contractSharePercentage = 20;
     uint256 daoShare = 30;
     uint256 winnerSharePercentage = 30;
+    uint256 currentUsersPercentage = 10;
     uint256 proposerSharePercentage = 10;
 
     event WinnersSelected(address[] winners);
@@ -65,6 +68,7 @@ contract PrizeDistribution is VRFV2WrapperConsumerBase, ConfirmedOwner {
     ) VRFV2WrapperConsumerBase(linkAddress, wrapperAddress)
     ConfirmedOwner(msg.sender) {
         savingsContract = ISavingsContract(_savingsContractAddress);
+        savingsContractAddress = savingsContractAddress;
         daoGovernance = IDAOGovernance(_daoGovernanceAddress);
     }
 
@@ -73,6 +77,7 @@ contract PrizeDistribution is VRFV2WrapperConsumerBase, ConfirmedOwner {
         onlyOwner
         returns (uint256 requestId)
     {
+        numWords = getNumWords();
         requestId = requestRandomness(
             callbackGasLimit,
             requestConfirmations,
@@ -85,7 +90,7 @@ contract PrizeDistribution is VRFV2WrapperConsumerBase, ConfirmedOwner {
         });
         requestIds.push(requestId);
         lastRequestId = requestId;
-        // lastRequestTime = block.timestamp;
+        lastRequestTime = block.timestamp;
         emit RequestSent(requestId, numWords);
         return requestId;
     }
@@ -128,10 +133,12 @@ contract PrizeDistribution is VRFV2WrapperConsumerBase, ConfirmedOwner {
     }
 
     function distributeProfit(uint256 amount) external onlyOwner {
+        // Clear winners array before starting distribution
+        clearWinners();
+
         require(amount > 0, "Invalid profit amount");
 
         address[] memory fetchedWinners = getWinners();
-        require(fetchedWinners.length == 5, "Invalid number of winners");
 
         address proposer = daoGovernance.getCurrentProposer();
         require(proposer != address(0), "No proposer found");
@@ -144,33 +151,46 @@ contract PrizeDistribution is VRFV2WrapperConsumerBase, ConfirmedOwner {
         uint256 proposerShare = (amount * proposerSharePercentage) / 100;
         uint256 contractShare = (amount * contractSharePercentage) / 100;
         uint256 totalDaoShare = (amount * daoShare) / 100;
-        uint256 daoSharePerMember = totalDaoShare / daoGovernance.getNumberOfMembers();
+        uint256 sharePerDAO = totalDaoShare / daoGovernance.getNumberOfMembers();
         uint256 winnerShare = (amount * winnerSharePercentage) / 100;
-        uint256 individualWinnerShare = winnerShare / winners.length;
+        uint256 individualWinnerShare = winnerShare / fetchedWinners.length;
+        uint256 currentUsersShare = (amount * currentUsersPercentage) / 100;
+        address[] memory numberOfUsers = savingsContract.fetchUserAddresses();
+        uint256 sharePerUser = currentUsersShare / numberOfUsers.length;
 
         // Transfer shares to proposer, contract, and DAO members
         savingsContract.transferFund(proposer, proposerShare);
-        savingsContract.transferFund(address(this), contractShare);
+        savingsContract.transferFund(savingsContractAddress, contractShare);
         address[] memory daos = daoGovernance.getDAOAddresses();
         for (uint256 i = 0; i < daos.length; i++) {
-            savingsContract.transferFund(daos[i], daoSharePerMember);
+            savingsContract.transferFund(daos[i], sharePerDAO);
+        }
+
+        // Transfer shares to current users
+        for (uint256 i = 0; i < numberOfUsers.length; i++) {
+            savingsContract.transferFund(numberOfUsers[i], sharePerUser);
         }
 
         // Transfer shares to winners
-        for (uint256 i = 0; i < winners.length; i++) {
-            savingsContract.transferFund(winners[i], individualWinnerShare);
+        for (uint256 i = 0; i < fetchedWinners.length; i++) {
+            savingsContract.transferFund(fetchedWinners[i], individualWinnerShare);
         }
 
-        // Clear winners array in Prize Distribution contract
-        clearWinners();
-
-        emit ProfitDistributed(proposer, proposerShare, contractShare, daoSharePerMember, winners, winnerShare);
+        emit ProfitDistributed(proposer, proposerShare, contractShare, sharePerDAO, winners, winnerShare);
     }
 
     function getWinners() public returns (address[] memory) {
-        uint256 totalSlots = savingsContract.getTotalSlots();
+        require(lastRequestId != 0, "requestRandomWords not called yet");
+        require(block.timestamp > lastRequestTime + 40, "Wait a bit longer for fulfillment");
+        ( , bool fulfilled, ) = getRequestStatus(lastRequestId);
+        require(fulfilled, "Random number not yet available");
+
+        uint256 userSlots = savingsContract.getTotalSlots();
+        uint256 daoSlots = savingsContract.totalDAOSlots();
+        uint256 totalSlots = userSlots - daoSlots;
         require(totalSlots >= numWords, "Not enough addresses for selection");
 
+        numWords = getNumWords();
         address[] memory selectedWinners = new address[](numWords);
         uint256[] memory latestRandomWords = s_requests[lastRequestId].randomWords;
         require(latestRandomWords.length == numWords, "Random words not available");
@@ -192,5 +212,12 @@ contract PrizeDistribution is VRFV2WrapperConsumerBase, ConfirmedOwner {
 
     function clearWinners() private {
         delete winners;
+    }
+
+    function getNumWords() public view returns(uint32 _numWords) {
+         address[] memory numberOfUsers = savingsContract.fetchUserAddresses();
+        // Check if numberOfWinners.length is within the uint32 range
+        require(numberOfUsers.length <= type(uint32).max, "Number of winners exceeds uint32 max value");
+        _numWords = uint32(((numberOfUsers.length * 5) / 100) + 1);
     }
 }

@@ -61,6 +61,7 @@ contract DAOGovernance is Ownable {
 
     function createProposal(address proposer, string memory description, uint256 endTime) private {
         uint256 proposalId = ++proposalCount;
+        updateTotalVotingPower();
         // Initialize the proposal in storage
         Proposal storage proposal = proposals[proposalId];
         // Update the fields of the proposal individually
@@ -145,9 +146,14 @@ contract DAOGovernance is Ownable {
         address[] memory members = savingsContract.fetchUserAddresses();
         for (uint256 i = 0; i < members.length; i++) {
             address member = members[i];
-            (uint256 balance, ) = savingsContract.getUserBalance(member);
-            uint256 votingPower = balance / 3000e6;
-            newTotalVotingPower += votingPower;
+            for (uint256 j = 0; j < daoAddresses.length; j++) {
+                address dao = daoAddresses[j];
+                if (dao == member) {
+                    (uint256 balance, ) = savingsContract.getUserBalance(member);
+                    uint256 votingPower = balance / 3000e6;
+                    newTotalVotingPower += votingPower;
+                }
+            }
         }
         totalVotingPower = newTotalVotingPower;
     }

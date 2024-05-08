@@ -24,15 +24,15 @@ contract SavingsContract is Ownable {
     address prizeDistributionAddress;
 
     // User-related mappings and arrays
-    address[] public userAddresses;
+    address[] userAddresses;
     mapping(address => User) public users;
     mapping(address => bool) private addressExists;
     mapping(uint256 => bool) amountWithdrawn;
     mapping(address => bool) agreementSent;
 
     // Contract balance
-    uint256 public totalStableCoinBalance;
-    uint256 public totalContractTokenBalance;
+    uint256 totalStableCoinBalance;
+    uint256 totalContractTokenBalance;
 
     struct User {
         uint256 stableCoinBalance;
@@ -94,6 +94,7 @@ contract SavingsContract is Ownable {
         // Remove user from array if stable coin balance is 0
         if (users[msg.sender].stableCoinBalance == 0) {
             users[msg.sender].slots = 0;
+            agreementSent[msg.sender] = false;
             _removeUser(msg.sender);
         }
 
@@ -118,9 +119,13 @@ contract SavingsContract is Ownable {
         users[user].slots = users[user].stableCoinBalance / 100e6;
 
         if (!users[user].isDAO && users[user].stableCoinBalance >= 3000e6 && !agreementSent[user]) {
-            regulatoryCompliance.sendAgreements("New DAO");
-            users[user].daoLockExpiry = block.timestamp + (1 * 365 days);
             agreementSent[user] = true;
+            regulatoryCompliance.sendAgreements("New DAO");
+
+            // I understand the below will be implemented for both users and DAO. It is necessary to 
+            // avoid redundant call to check the status of the voting process for a new proposal.
+            // It doesn't however stop the user from withdrawing as there is no check for them.
+            users[user].daoLockExpiry = block.timestamp + (1 * 365 days);
             emit AgreementSent(user);
         }
         emit StableCoinDeposited(user, amount);
@@ -153,31 +158,39 @@ contract SavingsContract is Ownable {
 
     function fetchAddressesBySlots() external view returns (address[] memory sortedAddresses) {
         uint256 totalSlots = getTotalSlots();
+        uint256 daoSlots = totalDAOSlots();
+        uint256 _arraySize = totalSlots - daoSlots;
 
-        sortedAddresses = new address[](totalSlots);
+        sortedAddresses = new address[](_arraySize);
         uint256 counter = 0;
 
         for (uint256 i = 0; i < userAddresses.length; i++) {
             address user = userAddresses[i];
-            for (uint256 j = 0; j < users[user].slots; j++) {
-                sortedAddresses[counter++] = user;
+            // Check if the user is not a DAO member
+            if (!users[user].isDAO) {
+                // If the user is not a DAO member, add them to the sortedAddresses array
+                for (uint256 j = 0; j < users[user].slots; j++) {
+                    sortedAddresses[counter++] = user;
+                }
             }
         }
 
         return sortedAddresses;
     }
 
-    function fetchUserAddresses() external view returns (address[] memory uniqueUserAddresses) {
-        uint256 totalAddresses = userAddresses.length;
-
-        uniqueUserAddresses = new address[](totalAddresses);
-        uint256 counter = 0;
-
+    function totalDAOSlots() public view returns(uint256) {
+        uint256 _totalDAOSlots = 0;
         for (uint256 i = 0; i < userAddresses.length; i++) {
-            uniqueUserAddresses[counter++] = userAddresses[i];
+            address user = userAddresses[i];
+            if (users[user].isDAO) {
+                _totalDAOSlots += users[userAddresses[i]].slots;
+            }
         }
+        return _totalDAOSlots;
+    }
 
-        return uniqueUserAddresses;
+    function fetchUserAddresses() external view returns (address[] memory) {
+        return userAddresses;
     }
 
     function getTotalSlots() public view returns (uint256) {
@@ -229,11 +242,11 @@ contract SavingsContract is Ownable {
         emit OwnerRefund(msg.sender, proposalId, amount);
     }
 
-    function distributeAirdrop(uint256 amount, address[] calldata airdropWinners) external onlyOwner {
+    function distributeAirdrop(uint256 amount) external onlyOwner {
         uint256 totalSlots = 0;
         // Calculate total slots
-        for (uint256 i = 0; i < airdropWinners.length; i++) {
-            address member = airdropWinners[i];
+        for (uint256 i = 0; i < userAddresses.length; i++) {
+            address member = userAddresses[i];
             (uint256 balance, ) = getUserBalance(member);
             // For every $20 deposited, the user has one slot
             uint256 slots = balance / 20e6;
@@ -244,8 +257,8 @@ contract SavingsContract is Ownable {
         uint256 amountPerSlot = amount / totalSlots;
 
         // Distribute the airdrop amount to each user based on their slots
-        for (uint256 i = 0; i < airdropWinners.length; i++) {
-            address member = airdropWinners[i];
+        for (uint256 i = 0; i < userAddresses.length; i++) {
+            address member = userAddresses[i];
             (uint256 balance, ) = getUserBalance(member);
             uint256 slots = balance / 20e6;
             uint256 allocatedAirdrop = amountPerSlot * slots;
