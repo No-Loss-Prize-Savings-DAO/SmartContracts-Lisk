@@ -141,6 +141,24 @@ describe("SavingsContract", function () {
       expect(balance.stableCoinBalance).to.equal(deposit);
     });
 
+    it("Should allow a user deposit 3000 USDT to savings contract", async function () {
+      const { savingsContract, thirdAccount, stableToken } = await loadFixture(deploySavingsContractFixture);
+
+      await stableToken.connect(thirdAccount).approve(savingsContract.target, 3_000_000_000);
+      await savingsContract.connect(thirdAccount).deposit(3_000_000_000);
+      const balance = await savingsContract.getUserBalance(thirdAccount);
+      expect(balance.stableCoinBalance).to.equal(3_000_000_000);
+    });
+
+    it("Should allow owner deposit 3000 USDT to savings contract", async function () {
+      const { savingsContract, owner, stableToken } = await loadFixture(deploySavingsContractFixture);
+
+      await stableToken.approve(savingsContract.target, 3_000_000_000);
+      await savingsContract.deposit(3_000_000_000);
+      const balance = await savingsContract.getUserBalance(owner);
+      expect(balance.stableCoinBalance).to.equal(3_000_000_000);
+    });
+
     it("Should allow multiple users deposit to savings contract", async function () {
       const { savingsContract, otherAccount, thirdAccount, fourthAccount, deposit, stableToken } = await loadFixture(deploySavingsContractFixture);
 
@@ -243,7 +261,7 @@ describe("SavingsContract", function () {
 
       await savingsContract.connect(seventhAccount).deposit(3000e6);
 
-      await expect(regulatoryCompliance.connect(seventhAccount).acceptAgreement()).to.be.revertedWith("Agreement already accepted");
+      await expect(regulatoryCompliance.connect(seventhAccount).acceptAgreement()).to.be.revertedWith("You responded already");
     });
 
     it("Should set agreementSent as false for users with less than 3000 usdt", async function () {
@@ -303,6 +321,17 @@ describe("SavingsContract", function () {
       await daoGovernance.connect(eighthAccount).voteOnProposal(2, false);
       await daoGovernance.connect(ninthAccount).voteOnProposal(2, true);
       await daoGovernance.connect(tenthAccount).voteOnProposal(2, false);
+      expect(await savingsContract.connect(seventhAccount).isDAO(seventhAccount)).to.equal(false);
+    });
+
+    it("Should allow user reject agreement", async function () {
+      const { savingsContract, stableToken, regulatoryCompliance, seventhAccount, eighthAccount, ninthAccount, tenthAccount, daoGovernance } = await loadFixture(daoMembershipFixture);
+
+      await stableToken.connect(seventhAccount).approve(savingsContract.target, 80000e6);
+      await savingsContract.connect(seventhAccount).deposit(25000e6);
+      await regulatoryCompliance.connect(seventhAccount).rejectAgreement();
+
+      expect(await savingsContract.connect(seventhAccount).isAgreementSent(seventhAccount)).to.equal(true);
       expect(await savingsContract.connect(seventhAccount).isDAO(seventhAccount)).to.equal(false);
     });
 
@@ -627,7 +656,7 @@ describe("SavingsContract", function () {
       await savingsContract.connect(thirdAccount).deposit(200_000_000);
       await savingsContract.connect(fourthAccount).deposit(100_000_000);
 
-      await savingsContract.distributeAirdrop(100_000_000_000_000_000_000_000n, [otherAccount, thirdAccount, fourthAccount]);
+      await savingsContract.distributeAirdrop(100_000_000_000_000_000_000_000n);
 
       const otherAccountBalance = await contractToken.balanceOf(otherAccount);
       const thirdAccountBalance = await contractToken.balanceOf(thirdAccount);
@@ -652,7 +681,7 @@ describe("SavingsContract", function () {
 
       const winners = [otherAccount, thirdAccount, fourthAccount];
 
-      expect(savingsContract.distributeAirdrop(100_000_000_000_000_000_000_000n, winners)).to.be.revertedWithCustomError;
+      expect(savingsContract.distributeAirdrop(100_000_000_000_000_000_000_000n)).to.be.revertedWithCustomError;
     });
   });
 });

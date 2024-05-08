@@ -18,9 +18,13 @@ interface ISavingsContract {
 
     function getTotalSlots() external view returns (uint256);
 
+    function totalDAOSlots() external view returns(uint256);
+
     function transferFund(address to, uint256 amount) external;
 
     function isDAO(address user) external view returns (bool);
+
+    function isAgreementSent(address user) external view returns (bool);
 
     function getUserBalance(address user) external view returns (uint256 stableCoinBalance, uint256 contractTokenBalance);
 

@@ -188,13 +188,13 @@ https://www.tradingview.com/markets/cryptocurrencies/prices-highest-total-value-
 
 ## PREVIOUS DEPLOYED ADDRESS
 {
-  "SavingsContractModule#BLZ": "0x40786860027C2BE814E80F4c01557B1333de8940",
-  "SavingsContractModule#ComplianceDatabase": "0x4b74Ce48b37a14d4C5242DdA747330DAA7B7bf44",
-  "SavingsContractModule#NFTContract": "0x6D502f8F7f6fBb02A5F240AaE76d734274E6557A",
-  "SavingsContractModule#SwapContract": "0xa20E18e6414CcfA888939b8aaFc503bE2997A674",
-  "SavingsContractModule#USDT": "0x3837A3D9C3d5d2FF94421C4dfE256b7d24Ad381e",
-  "SavingsContractModule#RegulatoryCompliance": "0x520F8e4f000692e6Ae2B9F2B949aa4eDA38Cb764",
-  "SavingsContractModule#SavingsContract": "0x845cFfa0b5Ee67F5Fa0C6a9A4A7da5ae91E31588",
-  "SavingsContractModule#DAOGovernance": "0x906C2f18b5963CA3e8F4a87dfB90216Fb94f4ec3",
-  "SavingsContractModule#PrizeDistribution": "0x64735D71AcD5e951ea870e4F936FB5CaCA26e636"
+  "SavingsContractModule#BLZ": "0xc2237Ce2B75206B445d08B32665a1E82F9EC9Dc1",
+  "SavingsContractModule#ComplianceDatabase": "0x2Ae1BebE7bAF0a24cF20b3b7153dB00f4799323A",
+  "SavingsContractModule#NFTContract": "0x5438740efd6A688d9652dAc1169e656F484E3ab1",
+  "SavingsContractModule#SwapContract": "0x31581f51bEFA86687f5bA0bfE760CFd98F983780",
+  "SavingsContractModule#USDT": "0xA96c8ba35064F197709C682A3ecBe210A6b2FA0c",
+  "SavingsContractModule#RegulatoryCompliance": "0xa4fF67906B3ad22e138801948db4bcAf873B3Fee",
+  "SavingsContractModule#SavingsContract": "0x8b886B6d3FB17c56645F073DD41981f607c1B096",
+  "SavingsContractModule#DAOGovernance": "0x4D219AE720D9f6C351710FbAb15C42C100798d3E",
+  "SavingsContractModule#PrizeDistribution": "0x87B4a93cFE1f5D1dCeB8Dd03cB8b6d73e3bdEa24"
 }
