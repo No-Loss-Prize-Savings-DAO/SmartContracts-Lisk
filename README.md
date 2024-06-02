@@ -1,6 +1,7 @@
 # Blitz
 
-![image](https://github.com/JeffreyJoel/No-loss-savings-FE-block-magic/assets/72028836/40cab129-dda9-4939-85b1-144133ff32fc)
+![image](https://github.com/No-Loss-Prize-Savings-DAO/SmartContracts-Lisk/assets/72028836/499189c6-8fcd-445c-bf82-dd21acecd72e)
+
 
 ## Overview
 Blitz represents a pioneering step in decentralized finance, blending the
